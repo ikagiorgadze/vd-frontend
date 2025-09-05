@@ -1,0 +1,185 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 220 15% 9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 15% 9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 15% 9%;
+
+    --primary: 0 0% 20%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 220 13% 96%;
+    --secondary-foreground: 220 15% 20%;
+
+    --muted: 220 13% 96%;
+    --muted-foreground: 220 8% 46%;
+
+    --accent: 220 13% 96%;
+    --accent-foreground: 220 15% 20%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 0 0% 20%;
+
+    /* Chart colors (keep original colors) */
+    --primary-blue: 218 100% 45%;
+    --primary-purple: 271 76% 53%;
+    --accent-teal: 180 100% 40%;
+    --success-green: 142 76% 36%;
+    --warning-orange: 25 95% 53%;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary-blue)), hsl(var(--primary-purple)));
+    --gradient-card: linear-gradient(145deg, hsl(var(--card)), hsl(var(--muted)/0.3));
+    --gradient-surface: linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted)/0.2));
+    
+    /* Shadows */
+    --shadow-card: 0 2px 8px -2px hsl(var(--primary)/0.1);
+    --shadow-card-hover: 0 8px 25px -8px hsl(var(--primary)/0.2);
+    --shadow-modal: 0 25px 50px -12px hsl(220 15% 9%/0.25);
+    
+    /* Animations */
+    --animation-card: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --animation-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+}
+
+@layer components {
+  .chart-card {
+    @apply bg-gradient-to-br from-card to-muted/30 
+           border border-border rounded-xl p-6
+           shadow-[var(--shadow-card)]
+           hover:shadow-[var(--shadow-card-hover)]
+           transition-[var(--animation-card)]
+           cursor-pointer
+           hover:scale-[1.02] hover:-translate-y-1;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary-blue via-primary-purple to-accent-teal 
+           bg-clip-text text-transparent;
+  }
+
+  .modal-overlay {
+    @apply fixed inset-0 z-50 
+           bg-background/80 backdrop-blur-sm
+           animate-in fade-in-0;
+  }
+
+  .modal-content {
+    @apply fixed left-1/2 top-1/2 z-50
+           -translate-x-1/2 -translate-y-1/2
+           bg-card border border-border rounded-2xl
+           shadow-[var(--shadow-modal)]
+           animate-in fade-in-0 zoom-in-95
+           duration-300;
+  }
+
+  .button-primary {
+    @apply bg-gradient-to-r from-primary-blue to-primary-purple
+           text-white font-medium px-6 py-3 rounded-lg
+           shadow-lg hover:shadow-xl
+           transition-[var(--animation-smooth)]
+           hover:scale-105 active:scale-95;
+  }
+
+  .button-outline {
+    @apply border border-primary text-primary
+           bg-primary/5 hover:bg-primary/10
+           font-medium px-4 py-2 rounded-lg
+           transition-[var(--animation-card)]
+           hover:scale-[1.02];
+  }
+
+  .sparkline-container {
+    @apply h-12 w-20 relative overflow-hidden rounded;
+  }
+
+  .country-badge {
+    @apply inline-flex items-center gap-1.5 px-2 py-1
+           bg-muted text-muted-foreground rounded-md
+           text-xs font-medium;
+  }
+}
