@@ -1,9 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { QueryState } from '@/lib/url-state';
 
 interface GlobalHeaderProps {
-  onQueryChange: (query: any) => void;
-  currentQuery: any;
+  onQueryChange: (query: QueryState) => void;
+  currentQuery: QueryState;
 }
 
 export function GlobalHeader({ onQueryChange, currentQuery }: GlobalHeaderProps) {

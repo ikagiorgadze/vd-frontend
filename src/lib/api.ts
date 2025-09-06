@@ -1,5 +1,9 @@
 // API configuration and service
-const API_BASE_URL =  process.env.REACT_APP_API_BASE_URL || 'http://localhost:3000';
+// In dev, route through Vite's proxy (server.proxy['/api']) to avoid CORS.
+// In all environments, allow override via VITE_API_BASE_URL.
+const API_BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL && String(import.meta.env.VITE_API_BASE_URL).trim()) ||
+  '/api';
 
 export interface ApiDataPoint {
   country_name: string;
@@ -40,13 +44,16 @@ export class VDemApiService {
         throw new Error(`API request failed: ${response.status} ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as unknown[];
       
       // Handle BigInt conversion if present
-      return data.map((item: any) => ({
-        ...item,
-        year: typeof item.year === 'bigint' ? Number(item.year) : item.year
-      }));
+      return (data as ApiDataPoint[]).map((item: ApiDataPoint) => {
+        const yearValue = (item as unknown as { year: number | bigint }).year;
+        return {
+          ...item,
+          year: typeof yearValue === 'bigint' ? Number(yearValue) : yearValue,
+        } as ApiDataPoint;
+      });
     } catch (error) {
       console.error('API query failed:', error);
       throw error;

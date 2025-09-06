@@ -2,7 +2,7 @@ import { getVariableName } from '@/lib/variable-codes';
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Download, Link2, Info } from 'lucide-react';
+import { Download, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ChartSidebar from '@/components/ChartSidebar';
 import { fetchVDemData, VDemDataPoint } from '@/lib/data';

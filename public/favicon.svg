@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="hsl(218,100%,45%)"/>
+      <stop offset="100%" stop-color="hsl(271,76%,53%)"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square background matching the header logo -->
+  <rect x="4" y="4" width="56" height="56" rx="8" fill="url(#g)"/>
+  <!-- Monogram 'VD' to mirror the header -->
+  <g fill="#fff">
+    <path d="M19 44L12 20h6l4.5 17.5L27 20h6l-8 24h-6z"/>
+    <path d="M33 20h7c6 0 10 4 10 12s-4 12-10 12h-7V20zm7 18c3.3 0 5-2.6 5-6s-1.7-6-5-6h-2v12h2z"/>
+  </g>
+</svg>

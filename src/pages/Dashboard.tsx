@@ -1,28 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ChartCard } from '@/components/ChartCard';
 import { VDEM_VARIABLES } from '@/lib/variables';
 import { fetchVDemData, VDemDataPoint } from '@/lib/data';
-import { QueryState, DEFAULT_STATE, urlParamsToState, buildChartUrl } from '@/lib/url-state';
+import { QueryState, buildChartUrl } from '@/lib/url-state';
 
 interface DashboardProps {
   currentQuery: QueryState;
   onQueryChange: (query: QueryState) => void;
 }
 
+// Sample countries for demo cards when user hasn't selected any
+const SAMPLE_COUNTRIES = ['moldova', 'serbia', 'romania'];
+
 export function Dashboard({ currentQuery, onQueryChange }: DashboardProps) {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const [cardData, setCardData] = useState<Record<string, VDemDataPoint[]>>({});
   const [loading, setLoading] = useState(true);
+
+  // Use sample countries when none are selected
+  const effectiveCountries = currentQuery.countries.length
+    ? currentQuery.countries
+    : SAMPLE_COUNTRIES;
+
+  // Exclude population from the sample cards
+  const variablesForCards = VDEM_VARIABLES.filter(v => v.id !== 'e_pop');
 
   // Load data for example cards
   useEffect(() => {
     const loadCardData = async () => {
       setLoading(true);
-      const promises = VDEM_VARIABLES.map(async (variable) => {
+      const promises = variablesForCards.map(async (variable) => {
         const data = await fetchVDemData(
-          currentQuery.countries,
+          effectiveCountries,
           variable.id,
           currentQuery.startYear,
           currentQuery.endYear
@@ -37,10 +47,19 @@ export function Dashboard({ currentQuery, onQueryChange }: DashboardProps) {
     };
 
     loadCardData();
-  }, [currentQuery.countries, currentQuery.startYear, currentQuery.endYear]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveCountries, currentQuery.startYear, currentQuery.endYear]);
 
   const handleCardClick = (variable: string) => {
-    const url = buildChartUrl(currentQuery, variable);
+    // When no countries selected, prefill with sample ones for the chart page
+    const overrides = currentQuery.countries.length === 0
+      ? { countries: SAMPLE_COUNTRIES }
+      : undefined;
+    // Also set variables list to the single selected var to align with multi-chart behavior
+    const url = buildChartUrl(currentQuery, variable, {
+      ...(overrides || {}),
+      variables: [variable],
+    });
     navigate(url);
   };
 
@@ -77,7 +96,7 @@ export function Dashboard({ currentQuery, onQueryChange }: DashboardProps) {
           <div className="max-w-md mx-auto mb-12 p-6 bg-card border border-border rounded-xl text-center">
             <h3 className="font-semibold mb-2">Get Started</h3>
             <p className="text-muted-foreground text-sm mb-4">
-              Pick a category in the header to generate custom charts, or explore the examples below.
+              Click “Explore Data” in the header to build custom charts, or browse the examples below.
             </p>
           </div>
         ) : (
@@ -103,12 +122,12 @@ export function Dashboard({ currentQuery, onQueryChange }: DashboardProps) {
 
         {/* Chart Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {VDEM_VARIABLES.map((variable) => (
+          {variablesForCards.map((variable) => (
             <ChartCard
               key={variable.id}
               variable={variable}
               data={cardData[variable.id] || []}
-              countries={currentQuery.countries}
+              countries={effectiveCountries}
               onClick={() => handleCardClick(variable.id)}
             />
           ))}

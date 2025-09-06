@@ -14,7 +14,7 @@ export interface QueryState {
 }
 
 export const DEFAULT_STATE: QueryState = {
-  countries: ['MDA', 'DEU', 'UKR'],
+  countries: [],
   startYear: 2010,
   endYear: 2024,
   chartType: 'line',
@@ -57,7 +57,8 @@ export function urlParamsToState(params: URLSearchParams): QueryState {
   const variable = params.get('var') || (vars.length > 0 ? vars[0] : undefined);
 
   return {
-    countries: params.get('countries')?.split(',').filter(Boolean) || DEFAULT_STATE.countries,
+  // If 'countries' param is absent, treat as empty selection (do not fall back to defaults)
+  countries: params.get('countries') ? params.get('countries')!.split(',').filter(Boolean) : [],
     startYear: parseInt(params.get('from') || DEFAULT_STATE.startYear.toString()),
     endYear: parseInt(params.get('to') || DEFAULT_STATE.endYear.toString()),
     variable,
@@ -75,8 +76,17 @@ export function urlParamsToState(params: URLSearchParams): QueryState {
   };
 }
 
-export function buildChartUrl(baseState: QueryState, variable: string): string {
-  const newState = { ...baseState, variable };
+export function buildChartUrl(
+  baseState: QueryState,
+  variable: string,
+  overrides?: Partial<QueryState>
+): string {
+  // Merge base state with provided overrides and explicit variable
+  const newState: QueryState = {
+    ...baseState,
+    variable,
+    ...overrides,
+  } as QueryState;
   const params = stateToUrlParams(newState);
   return `/chart?${params.toString()}`;
 }

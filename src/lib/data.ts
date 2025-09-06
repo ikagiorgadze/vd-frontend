@@ -1,4 +1,4 @@
-import { apiService, ApiQueryRequest } from './api';
+import { apiService, ApiQueryRequest, ApiDataPoint } from './api';
 import { getVariableCode, getVariableName } from './variable-codes';
 import { getCountryById } from './countries';
 
@@ -11,7 +11,7 @@ export interface VDemDataPoint {
 
 // Transform API response to internal format
 function transformApiData(
-  apiData: any[], 
+  apiData: ApiDataPoint[], 
   variable: string, 
   countries: string[]
 ): VDemDataPoint[] {
@@ -24,20 +24,20 @@ function transformApiData(
   const result: VDemDataPoint[] = [];
   
   for (const row of apiData) {
-    // Convert country code to country name if needed
+    // Match incoming API country name to our country slug IDs via name
     const countryId = countries.find(id => {
       const country = getCountryById(id);
-      return country?.name === row.country_name || id === row.country_name;
+      return country?.name === row.country_name;
     });
     
     if (!countryId) continue;
     
-    const value = row[variableCode];
+  const value = (row as unknown as Record<string, unknown>)[variableCode];
     if (value !== null && value !== undefined) {
       result.push({
         country: countryId,
         year: row.year,
-        value: Number(value),
+    value: Number(value as number),
         variable
       });
     }
@@ -103,6 +103,10 @@ export async function fetchVDemData(
   startYear: number,
   endYear: number
 ): Promise<VDemDataPoint[]> {
+  // If no countries are selected, do not call the API (many backends error on IN ())
+  if (countries.length === 0) {
+    return [];
+  }
   // Get variable code for API
   const variableCode = getVariableCode(variable);
   if (!variableCode) {
