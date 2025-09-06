@@ -1,0 +1,81 @@
+name: Deploy Frontend to EC2
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: vd-frontend-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Copy nginx config to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_SSH_PORT }}
+          source: "deploy/nginx-vd-site.conf"
+          target: "/tmp/"
+
+      - name: Deploy over SSH and build frontend
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_SSH_PORT }}
+          script: |
+            set -euo pipefail
+
+            REPO_DIR="/opt/vd-frontend"
+
+            if ! command -v git >/dev/null 2>&1; then
+              sudo apt-get update -y
+              sudo apt-get install -y git
+            fi
+            if ! command -v node >/dev/null 2>&1; then
+              curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+              sudo apt-get install -y nodejs
+            fi
+            if ! command -v nginx >/dev/null 2>&1; then
+              sudo apt-get update -y
+              sudo apt-get install -y nginx
+            fi
+
+            sudo mkdir -p "$REPO_DIR"
+            sudo chown -R "$USER":"$USER" "$REPO_DIR"
+            if [ ! -d "$REPO_DIR/.git" ]; then
+              git clone --depth 1 "https://github.com/${{ github.repository }}.git" "$REPO_DIR"
+            fi
+            cd "$REPO_DIR"
+            git fetch --all --prune
+            git reset --hard origin/main
+
+            # Write .env for Vite build with API URL pointing to same domain
+            if [ ! -f .env ]; then
+              echo 'VITE_API_BASE_URL=/api' > .env
+            fi
+
+            npm ci
+            npm run build
+
+            # Publish to nginx web root
+            sudo rm -rf /var/www/vd-frontend
+            sudo mkdir -p /var/www/vd-frontend
+            sudo cp -r dist/* /var/www/vd-frontend/
+
+            # Install nginx site
+            sudo mv /tmp/deploy/nginx-vd-site.conf /etc/nginx/sites-available/vd-site
+            sudo ln -sf /etc/nginx/sites-available/vd-site /etc/nginx/sites-enabled/vd-site
+            sudo rm -f /etc/nginx/sites-enabled/default || true
+
+            # Reload nginx to apply changes
+            sudo nginx -t
+            sudo systemctl reload nginx
