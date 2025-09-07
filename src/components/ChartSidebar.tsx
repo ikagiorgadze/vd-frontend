@@ -7,6 +7,7 @@ import { QueryState } from '@/lib/url-state';
 import { CATEGORIES, VDemCategory } from '@/lib/variables';
 import { getSubcategoriesForCategory, getVariablesForSubcategory } from '@/lib/variable-mappings';
 import { getVariableCode } from '@/lib/variable-codes';
+import { HIDDEN_VARIABLE_CODES } from '@/lib/hidden-variables';
 import { getVariableById, getSubcategoryById } from '@/lib/variables';
 import { getMeasurePathByCode, getMeasurePathByLabel } from '@/lib/measure-index';
 import { getVariableName } from '@/lib/variable-codes';
@@ -29,6 +30,9 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
   // Roving focus for keyboard navigation in the measures tree
   const [focusedKey, setFocusedKey] = useState<string>('all');
   const rowRefs = useRef<Record<string, HTMLElement | null>>({});
+  // Local input state for years to avoid clamping on every keystroke
+  const [fromYearInput, setFromYearInput] = useState<string>(String(currentQuery.startYear));
+  const [toYearInput, setToYearInput] = useState<string>(String(currentQuery.endYear));
 
   const filteredCountries = useMemo(() => {
     return countrySearch ? searchCountries(countrySearch) : COUNTRIES;
@@ -164,6 +168,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
             const vars = getVariables(cat, sub);
             for (const v of vars) {
               const code = getVariableCode(v) ?? v;
+              if (code && HIDDEN_VARIABLE_CODES.has(code)) continue;
               const varKey = `var::${code}`;
               items.push({ key: varKey, type: 'variable', level: 3, cat, sub, code });
             }
@@ -267,12 +272,24 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
     }
   };
 
-  const changeYear = (field: 'startYear' | 'endYear', value: string) => {
-    const year = parseInt(value || '0', 10);
-    if (!Number.isNaN(year)) {
-      onQueryChange({ ...currentQuery, [field]: year });
-    }
+  const commitYear = (field: 'startYear' | 'endYear', value: string) => {
+    const now = new Date().getFullYear();
+    const parsed = parseInt(value, 10);
+    const fallback = field === 'startYear' ? 1800 : now;
+    const raw = Number.isFinite(parsed) ? parsed : fallback;
+    const clamped = Math.max(1800, Math.min(raw, now));
+    onQueryChange({ ...currentQuery, [field]: clamped });
+    if (field === 'startYear') setFromYearInput(String(clamped));
+    else setToYearInput(String(clamped));
   };
+
+  // Keep local inputs in sync if query changes elsewhere
+  useEffect(() => {
+    setFromYearInput(String(currentQuery.startYear));
+  }, [currentQuery.startYear]);
+  useEffect(() => {
+    setToYearInput(String(currentQuery.endYear));
+  }, [currentQuery.endYear]);
 
   // Remove a selected measure by its code
   const removeMeasure = (code: string) => {
@@ -403,15 +420,16 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
       <div className="space-y-2 mb-4">
         <Label className="text-xs">Time Period</Label>
         <div className="grid grid-cols-2 gap-2">
-          <div>
+      <div>
             <Label htmlFor="from" className="text-xs">From</Label>
             <Input
               id="from"
               type="number"
-              min={1900}
-              max={2100}
-              value={currentQuery.startYear}
-              onChange={(e) => changeYear('startYear', e.target.value)}
+              min={1800}
+              max={new Date().getFullYear()}
+        value={fromYearInput}
+        onChange={(e) => setFromYearInput(e.target.value)}
+        onBlur={(e) => commitYear('startYear', e.target.value)}
             />
           </div>
           <div>
@@ -419,10 +437,11 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
             <Input
               id="to"
               type="number"
-              min={1900}
-              max={2100}
-              value={currentQuery.endYear}
-              onChange={(e) => changeYear('endYear', e.target.value)}
+              min={1800}
+              max={new Date().getFullYear()}
+        value={toYearInput}
+        onChange={(e) => setToYearInput(e.target.value)}
+        onBlur={(e) => commitYear('endYear', e.target.value)}
             />
           </div>
         </div>
@@ -516,6 +535,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                             <div className="pl-6 py-1">
                               {getVariables(cat, sub).map((v) => {
                                 const code = getVariableCode(v) ?? v;
+                                if (code && HIDDEN_VARIABLE_CODES.has(code)) return null;
                                 const isActive = (currentQuery.variables ?? (currentQuery.variable ? [currentQuery.variable] : [])).includes(code);
                                 const inputId = `var-${cat}-${sub}-${code}`.replace(/\s+/g, '_');
                                 return (
