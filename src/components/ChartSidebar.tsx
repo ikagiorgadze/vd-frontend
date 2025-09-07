@@ -7,6 +7,7 @@ import { QueryState } from '@/lib/url-state';
 import { CATEGORIES, VDemCategory } from '@/lib/variables';
 import { getSubcategoriesForCategory, getVariablesForSubcategory } from '@/lib/variable-mappings';
 import { getVariableCode } from '@/lib/variable-codes';
+import { HIDDEN_VARIABLE_CODES } from '@/lib/hidden-variables';
 import { getVariableById, getSubcategoryById } from '@/lib/variables';
 import { getMeasurePathByCode, getMeasurePathByLabel } from '@/lib/measure-index';
 import { getVariableName } from '@/lib/variable-codes';
@@ -164,6 +165,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
             const vars = getVariables(cat, sub);
             for (const v of vars) {
               const code = getVariableCode(v) ?? v;
+              if (code && HIDDEN_VARIABLE_CODES.has(code)) continue;
               const varKey = `var::${code}`;
               items.push({ key: varKey, type: 'variable', level: 3, cat, sub, code });
             }
@@ -516,6 +518,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                             <div className="pl-6 py-1">
                               {getVariables(cat, sub).map((v) => {
                                 const code = getVariableCode(v) ?? v;
+                                if (code && HIDDEN_VARIABLE_CODES.has(code)) return null;
                                 const isActive = (currentQuery.variables ?? (currentQuery.variable ? [currentQuery.variable] : [])).includes(code);
                                 const inputId = `var-${cat}-${sub}-${code}`.replace(/\s+/g, '_');
                                 return (
