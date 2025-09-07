@@ -1,0 +1,971 @@
+{
+  "V-Dem High-Level Democracy Indices": {
+    "Electoral democracy index": "v2x_polyarchy",
+    "Liberal democracy index": "v2x_libdem",
+    "Participatory democracy index": "v2x_partipdem",
+    "Deliberative democracy index": "v2x_delibdem",
+    "Egalitarian democracy index": "v2x_egaldem"
+  },
+  "V-Dem Mid-Level Indices: Components of the Democracy Indices": {
+    "Additive polyarchy index": "v2x_api",
+    "Multiplicative polyarchy index": "v2x_mpi",
+    "Freedom of Expression and Alternative Sources of Information index": "v2x_freexp_altinf",
+    "Freedom of association thick index": "v2x_frassoc_thick",
+    "Share of population with suffrage": "v2x_suffr",
+    "Clean elections index": "v2xel_frefair",
+    "Elected officials index": "v2x_elecoff",
+    "Liberal component index": "v2x_liberal",
+    "Equality before the law and individual liberty index": "v2xcl_rol",
+    "Judicial constraints on the executive index": "v2x_jucon",
+    "Legislative constraints on the executive index": "v2xlg_legcon",
+    "Participatory component index": "v2x_partip",
+    "Civil society participation index": "v2x_cspart",
+    "Direct popular vote index": "v2xdd_dd",
+    "Local government index": "v2xel_locelec",
+    "Regional government index": "v2xel_regelec",
+    "Deliberative component index": "v2xdl_delib",
+    "Egalitarian component index": "v2x_egal",
+    "Equal protection index": "v2xeg_eqprotec",
+    "Equal access index": "v2xeg_eqaccess",
+    "Equal distribution of resources index": "v2xeg_eqdr"
+  },
+  "Elections": {
+    "General": {
+      "Election type": "v2eltype"
+    },
+    "Suffrage": {
+      "Suffrage": "v2asuffrage",
+      "Minimum voting age": "v2elage",
+      "Compulsory voting": "v2elcomvot",
+      "Female suffrage restricted": "v2elfemrst",
+      "Suffrage level": "v2elgvsuflvl",
+      "Percentage of population with suffrage": "v2elsuffrage",
+      "Fraud allegations by Western monitors": "v2elwestmon",
+      "Female suffrage": "v2fsuffrage",
+      "Male suffrage": "v2msuffrage"
+    },
+    "Election Qualities": {
+      "Disclosure of campaign donations": "v2eldonate",
+      "Public campaign finance": "v2elpubfin",
+      "EMB autonomy": "v2elembaut",
+      "EMB capacity": "v2elembcap",
+      "Elections multiparty": "v2elmulpar",
+      "Election voter registry": "v2elrgstry",
+      "Election vote buying": "v2elvotbuy",
+      "Election other voting irregularities": "v2elirreg",
+      "Election government intimidation": "v2elintim",
+      "Election other electoral violence": "v2elpeace",
+      "Election boycotts": "v2elboycot",
+      "Election free campaign media": "v2elfrcamp",
+      "Election paid campaign advertisements": "v2elpdcamp",
+      "Election paid interest group media": "v2elpaidig",
+      "Election free and fair": "v2elfrfair",
+      "Election domestic election monitors": "v2eldommon",
+      "Election international monitors": "v2elintmon",
+      "Election international monitors denied": "v2elmonden",
+      "Monitors refuse to be present": "v2elmonref",
+      "Candidate restriction by ethnicity, race, religion, or language": "v2elrstrct"
+    },
+    "Election Outcomes": {
+      "Election losers accept results": "v2elaccept",
+      "Election assume office": "v2elasmoff",
+      "Election turnout": "v2eltrnout",
+      "Election VAP turnout": "v2elvaptrn",
+      "Name of largest party": "v2lpname",
+      "Name of second largest party": "v2slpname",
+      "Name of third largest party": "v2tlpname"
+    },
+    "Executive Elections Specifics": {
+      "Presidential elections consecutive": "v2elprescons",
+      "Presidential elections cumulative": "v2elprescumul",
+      "HOG restriction by ethnicity, race, religion, or language": "v2elrsthog",
+      "HOS restriction by ethnicity, race, religion, or language": "v2elrsthos",
+      "Election HOG turnover ordinal": "v2elturnhog",
+      "Election HOS turnover ordinal": "v2elturnhos",
+      "Election executive turnover ordinal": "v2eltvrexo",
+      "Presidential election vote share of largest vote-getter": "v2elvotlrg",
+      "Presidential election vote share of second-largest vote-getter": "v2elvotsml"
+    },
+    "Lower Chamber Specifics": {
+      "Lower chamber ‘base’ tier electoral districts": "v2ellobadis",
+      "Lower chamber ‘base’ or ‘nominal’ tier seats": "v2ellobaseat",
+      "Lower chamber election consecutive": "v2ellocons",
+      "Lower chamber election cumulative": "v2ellocumul",
+      "Lower chamber election district effective magnitude": "v2ellodiseff",
+      "Lower chamber election district magnitude": "v2elloeldm",
+      "Lower chamber electoral system — 13 categories": "v2elloelsy",
+      "Lower chamber hybrid system reserved seats": "v2elloreseat",
+      "Lower chamber election seats": "v2elloseat",
+      "Lower chamber election seats won by largest party": "v2ellostlg",
+      "Lower chamber election seat share won by largest party": "v2ellostsl",
+      "Lower chamber election seats won by second largest party": "v2ellostsm",
+      "Lower chamber election seat share won by second largest party": "v2ellostss",
+      "Lower chamber election seats won by third largest party": "v2ellosttm",
+      "Lower chamber election seat share won by third largest party": "v2ellostts",
+      "Lower chamber ‘upper’ tier electoral districts ": "v2elloupdis",
+      "Lower chamber election vote share of largest vote-getter": "v2ellovtlg",
+      "Lower chamber election vote share of second-largest vote-getter": "v2ellovtsm",
+      "Lower chamber election vote share of third-largest vote-getter": "v2ellovttm",
+      "Lower chamber electoral system": "v2elparlel",
+      "Lower chamber election statutory threshold": "v2elthresh",
+      "Lower chamber election turnover": "v2eltvrig"
+    },
+    "Subnational": {
+      "Regional government exists (A,C)": "v2elreggov",
+      "Regional government name (A,C)": "v2elregnam",
+      "Regional government elected (A,C)": "v2elsrgel",
+      "Regional offices relative power": "v2elrgpwr",
+      "Local government exists (A,C)": "v2ellocgov",
+      "Local government name (A,C)": "v2ellocnam",
+      "Local government elected (A,C)": "v2ellocelc",
+      "Local offices relative power": "v2ellocpwr",
+      "Subnational elections free and fair": "v2elffelr",
+      "Subnational elections held": "v2elffelrbin",
+      "Subnational election unevenness": "v2elsnlsff",
+      "Subnational election area less free and fair name": "v2elsnless",
+      "Subnational election area less free and fair characteristics": "v2elsnlfc",
+      "Subnational election area more free and fair name": "v2elsnmore",
+      "Subnational election area more free and fair characteristics": "v2elsnmrfc"
+    }
+  },
+  "Political Parties": {
+    "General": {
+      "Barriers to parties": "v2psbars",
+      "Party ban": "v2psparban",
+      "Party ban target": "v2psbantar",
+      "Opposition parties autonomy": "v2psoppaut",
+      "Party organizations": "v2psorgs",
+      "Party branches": "v2psprbrch",
+      "Party linkages": "v2psprlnks",
+      "Distinct party platforms": "v2psplats",
+      "Candidate selection-national/local": "v2pscnslnl",
+      "Legislative party cohesion": "v2pscohesv",
+      "Party competition across regions": "v2pscomprg",
+      "National party control": "v2psnatpar",
+      "Subnational party control": "v2pssunpar"
+    }
+  },
+  "Direct Democracy": {
+    "Initiatives": {
+      "Initiatives permitted": "v2ddlexci",
+      "Initiatives signatures": "v2ddsignci",
+      "Initiatives signatures %": "v2ddsigpci",
+      "Initiatives signature-gathering period": "v2ddsigdci",
+      "Initiatives signature-gathering time limit": "v2ddsiglci",
+      "Initiatives participation threshold": "v2ddpartci",
+      "Initiatives approval threshold": "v2ddapprci",
+      "Initiatives administrative threshold": "v2ddadmci",
+      "Initiatives super majority": "v2ddspmci",
+      "Popular initiative credible threat": "v2ddthreci"
+    },
+    "Referendums": {
+      "Referendums permitted": "v2ddlexrf",
+      "Referendums signatures": "v2ddsignrf",
+      "Referendums signatures %": "v2ddsigprf",
+      "Referendums signature-gathering period": "v2ddsigdrf",
+      "Referendums signature-gathering limit": "v2ddsiglrf",
+      "Referendums participation threshold": "v2ddpartrf",
+      "Referendums approval threshold": "v2ddapprrf",
+      "Referendums administrative threshold": "v2ddadmrf",
+      "Referendums super majority": "v2ddspmrf",
+      "Popular referendum credible threat": "v2ddthrerf"
+    },
+    "Obligatory referendums": {
+      "Enforcement of Constitutional changes through popular vote": "v2ddlexor",
+      "Obligatory referendum participation threshold": "v2ddpartor",
+      "Obligatory referendum approval threshold": "v2ddappor",
+      "Obligatory referendum administrative threshold": "v2ddadmor",
+      "Obligatory referendum super majority": "v2ddspmor",
+      "Obligatory referendum credible threat": "v2ddthreor"
+    },
+    "Plebiscites": {
+      "Plebiscites permitted": "v2ddlexpl",
+      "Plebiscites participation threshold": "v2ddpartpl",
+      "Plebiscites approval threshold": "v2ddapprpl",
+      "Plebiscites administrative threshold": "v2ddadmpl",
+      "Plebiscites super majority": "v2ddspmpl",
+      "Plebiscites credible threat": "v2ddthrepl"
+    },
+    "Occurrences": {
+      "Occurrence of citizen-initiatives this year": "v2ddyrci",
+      "Occurrence of referendum this year": "v2ddyrrf",
+      "Occurrence of obligatory referendum this year": "v2ddyror",
+      "Occurrence of plebiscite this year": "v2ddyrpl",
+      "Number of popular votes this year": "v2ddyrall",
+      "Occurrence of any type of popular vote this year credible": "v2ddcredal"
+    }
+  },
+  "The Executive": {
+    "General": {
+      "Executive respects constitution": "v2exrescon",
+      "Executive bribery and corrupt exchanges": "v2exbribe",
+      "Executive embezzlement and theft": "v2exembez",
+      "Public sector corrupt exchanges": "v2excrptps",
+      "Public sector theft": "v2exthftps",
+      "Chief executive appointment by upper chamber": "v2exapup",
+      "Chief executive appointment by upper chamber implicit approval": "v2exapupap"
+    },
+    "Head of State": {
+      "HOS name": "v2exnamhos",
+      "HOS title": "v2extithos",
+      "HOS removal by legislature in practice": "v2exremhsp",
+      "HOS removal by other in practice": "v2exrmhsol",
+      "HOS other body remove HOS in practice": "v2exrmhsnl",
+      "HOS control over": "v2exctlhs",
+      "HOS other body controls": "v2exctlhos",
+      "HOS dissolution in practice": "v2exdfdshs",
+      "HOS appoints cabinet in practice": "v2exdfcbhs",
+      "HOS veto power in practice": "v2exdfvths",
+      "HOS dismisses ministers in practice": "v2exdfdmhs",
+      "HOS proposes legislation in practice": "v2exdfpphs",
+      "HOS = HOG": "v2exhoshog",
+      "HOS age": "v2exagehos",
+      "HOS selection by legislature in practice": "v2exaphos",
+      "HOS directly elected": "v2ex_elechos",
+      "HOS female": "v2exfemhos",
+      "HOS term length by law": "v2exfxtmhs",
+      "HOS appointment in practice": "v2expathhs",
+      "HOS year of death": "v2exdeathos",
+      "HOS party affiliation": "v2exparhos"
+    },
+    "Head of Government": {
+      "HOG name": "v2exnamhog",
+      "HOG title": "v2extithog",
+      "HOG removal by legislature in practice": "v2exremhog",
+      "HOG removal by other in practice": "v2exrmhgnp",
+      "HOG other body remove HOG in practice": "v2exrmhgop",
+      "HOG control over": "v2exctlhg",
+      "HOG other body controls": "v2exctlhog",
+      "HOG dissolution in practice": "v2exdjdshg",
+      "HOG appoints cabinet in practice": "v2exdjcbhg",
+      "HOG dismisses ministers in practice": "v2exdfdshg",
+      "HOG veto power in practice": "v2exdfvthg",
+      "HOG proposes legislation in practice": "v2exdfpphg",
+      "HOG age": "v2exagehog",
+      "HOG selection by legislature in practice": "v2exaphogp",
+      "HOG directly elected": "v2ex_elechog",
+      "HOG female": "v2exfemhog",
+      "HOG term length by law": "v2exfxtmhg",
+      "Relative power of the HOG": "v2ex_hogw",
+      "HOG appointed by HOS": "v2ex_hosconhog",
+      "HOG appointment in practice": "v2expathhg",
+      "HOG year of death": "v2exdeathog",
+      "HOG party affiliation": "v2expothog"
+    }
+  },
+  "Regime": {
+    "General": {
+      "Regime information": "v2reginfo",
+      "Regime end type": "v2regendtype",
+      "Regime end type, multiple selection version": "v2regendtypems",
+      "Regime interregnum": "v2regint",
+      "Regime ID": "v2regidnr",
+      "Regime duration": "v2regdur",
+      "Regime support groups": "v2regsupgroups",
+      "Regime most important support group": "v2regimpgroup",
+      "Regime support groups size": "v2regsupgroupssize",
+      "Regime support location": "v2regsuploc",
+      "Regime opposition groups": "v2regoppgroups",
+      "Explicit and active regime opposition groups": "v2regoppgroupsact",
+      "Regime most important opposition group": "v2regimpoppgroup",
+      "Regime opposition groups size": "v2regoppgroupssize",
+      "Regime opposition location": "v2regopploc",
+      "Strongest pro-regime preferences": "v2regproreg",
+      "Strongest anti-regime preferences": "v2regantireg",
+      "Most powerful group in affecting regime duration and change": "v2regpower"
+    }
+  },
+  "The Legislature": {
+    "General": {
+      "Legislature bicameral": "v2lgbicam",
+      "Legislature dominant chamber": "v2lgdomchm",
+      "Legislature questions officials in practice": "v2lgqstexp",
+      "Legislature investigates in practice": "v2lginvstp",
+      "Executive oversight": "v2lgotovst",
+      "Legislature corrupt activities": "v2lgcrrpt",
+      "Legislature opposition parties": "v2lgoppart",
+      "Legislature controls resources": "v2lgfunds",
+      "Representation of disadvantaged social groups": "v2lgdsadlo",
+      "Representation of disadvantaged social groups binary": "v2lgdsadlobin",
+      "Relative power of the HOS": "v2ex_hosw",
+      "HOG appointed by legislature": "v2ex_legconhog",
+      "HOS appointed by legislature": "v2ex_legconhos",
+      "Legislature approval of treaties by law": "v2lgtreaty",
+      "Legislature declares war by law": "v2lgwarlaw"
+    },
+    "Upper Chamber": {
+      "Upper chamber name": "v2lgnameup",
+      "Upper chamber legislates in practice": "v2lglegpup",
+      "Upper chamber elected": "v2lgelecup",
+      "Percentage of indirectly elected legislators upper chamber": "v2lginelup",
+      "Upper chamber introduces bills": "v2lgintbup"
+    },
+    "Unicameral or Lower Chamber": {
+      "Lower chamber legislature name": "v2lgnamelo",
+      "Lower chamber legislates in practice": "v2lglegplo",
+      "Lower chamber committees": "v2lgcomslo",
+      "Lower chamber members serve in government": "v2lgsrvlo",
+      "Lower chamber staff": "v2lgstafflo",
+      "Lower chamber elected": "v2lgello",
+      "Lower chamber female legislators": "v2lgfemleg",
+      "Percentage of indirectly elected legislators lower chamber": "v2lginello",
+      "Lower chamber introduces bills": "v2lgintblo",
+      "Lower chamber gender quota": "v2lgqugen",
+      "Lower chamber gender quota placement mandate": "v2lgqugens",
+      "Lower chamber gender quota threshold": "v2lgqugent"
+    }
+  },
+  "Deliberation": {
+    "General": {
+      "Reasoned justification": "v2dlreason",
+      "Common good": "v2dlcommon",
+      "Respect counterarguments": "v2dlcountr",
+      "Range of consultation": "v2dlconslt",
+      "Engaged society": "v2dlengage",
+      "Particularistic or public goods": "v2dlencmps",
+      "Means-tested v. universalistic policy": "v2dlunivl"
+    }
+  },
+  "The Judiciary": {
+    "General": {
+      "Judicial reform": "v2jureform",
+      "Judicial purges": "v2jupurge",
+      "Government attacks on judiciary": "v2jupoatck",
+      "Court packing": "v2jupack",
+      "Judicial accountability": "v2juaccnt",
+      "Judicial corruption decision": "v2jucorrdc",
+      "High court name": "v2juhcname",
+      "High court independence": "v2juhcind",
+      "Lower court independence": "v2juncind",
+      "Compliance with high court": "v2juhccomp",
+      "Compliance with judiciary": "v2jucomp",
+      "Judicial review": "v2jureview",
+      "Codeable": "v2jucodable",
+      "Corresponding flowchart": "v2juflow",
+      "Language": "v2julanguage",
+      "Team translated": "v2juteamtr"
+    }
+  },
+
+  "Civil Liberty": {
+    "Personal Integrity Rights": {
+      "Freedom from torture": "v2cltort",
+      "Freedom from political killings": "v2clkill",
+      "Freedom from forced labor for men": "v2clslavem",
+      "Freedom from forced labor for women": "v2clslavef"
+    },
+    "Impartial Enforcement": {
+      "Transparent laws with predictable enforcement": "v2cltrnslw",
+      "Rigorous and impartial public administration": "v2clrspct",
+      "Access to justice for men": "v2clacjstm",
+      "Access to justice for women": "v2clacjstw",
+      "Social class equality in respect for civil liberty": "v2clacjust",
+      "Social group equality in respect for civil liberties": "v2clsocgrp",
+      "Subnational civil liberties unevenness": "v2clrgunev",
+      "Stronger civil liberties characteristics": "v2clrgstch",
+      "Weaker civil liberties population": "v2clsnlpct",
+      "Weaker civil liberties characteristics": "v2clrgwkch"
+    },
+    "Private and Political Liberties": {
+      "Freedom of discussion for men": "v2cldiscm",
+      "Freedom of discussion for women": "v2cldiscw",
+      "Freedom of academic and cultural expression": "v2clacfree",
+      "Freedom of religion": "v2clrelig",
+      "Freedom of foreign movement": "v2clfmove",
+      "Freedom of domestic movement for men": "v2cldmovem",
+      "Freedom of domestic movement for women": "v2cldmovew"
+    },
+    "Property Rights": {
+      "State ownership of economy": "v2clstown",
+      "Property rights for men": "v2clprptym",
+      "Property rights for women": "v2clprptyw"
+    }
+  },
+  "Sovereignty/State": {
+    "General": {
+      "Domestic autonomy": "v2svdomaut",
+      "International autonomy": "v2svinlaut",
+      "State authority over territory": "v2svstterr",
+      "State fiscal source of revenue": "v2stfisccap",
+      "Bureaucratic remuneration": "v2strenadm",
+      "Criteria for appointment decisions in the state administration": "v2stcritrecadm",
+      "Criteria for appointment decisions in the armed forces": "v2stcritapparm",
+      "Remuneration in the Armed Forces": "v2strenarm",
+      "Independent states": "v2svindep"
+    }
+  },
+  "Civil Society": {
+    "General": {
+      "CSO entry and exit": "v2cseeorgs",
+      "CSO repression": "v2csreprss",
+      "CSO consultation": "v2cscnsult",
+      "CSO structure": "v2csstruc",
+      "CSO participatory environment": "v2csprtcpt",
+      "CSO women’s participation": "v2csgender",
+      "CSO anti-system movements": "v2csantimv",
+      "CSO anti-system movement character": "v2csanmvch",
+      "Religious organization repression": "v2csrlgrep",
+      "Religious organization consultation": "v2csrlgcon"
+    }
+  },
+  "The Media": {
+    "General": {
+      "Government censorship effort — Media": "v2mecenefm",
+      "Internet censorship effort": "v2mecenefi",
+      "Internet binary": "v2mecenefibin",
+      "Print/broadcast media critical": "v2mecrit",
+      "Print/broadcast media perspectives": "v2merange",
+      "Female journalists": "v2mefemjrn",
+      "Harassment of journalists": "v2meharjrn",
+      "Media self-censorship": "v2meslfcen",
+      "Media bias": "v2mebias",
+      "Media corrupt": "v2mecorrpt"
+    }
+  },
+  "Political Equality": {
+    "General": {
+      "Power distributed by socioeconomic position": "v2pepwrses",
+      "Power distributed by social group": "v2pepwrsoc",
+      "Power distributed by gender": "v2pepwrgen",
+      "Power distributed by sexual orientation": "v2pepwrort",
+      "Educational equality": "v2peedueq",
+      "Health equality": "v2pehealth",
+      "Primary school enrolment": "v2peprisch",
+      "Secondary school enrolment": "v2pesecsch",
+      "Tertiary school enrolment": "v2petersch"
+    }
+  },
+  "Exclusion": {
+    "Exclusion by Socio-Economic Group": {
+      "Access to public services distributed by socio-economic position": "v2peapsecon",
+      "Access to state jobs by socio-economic position": "v2peasjsoecon",
+      "Access to state business opportunities by socio-economic position": "v2peasbecon"
+    },
+    "Exclusion by Gender": {
+      "Gender equality in respect for civil liberties": "v2clgencl",
+      "Access to public services distributed by gender": "v2peapsgen",
+      "Access to state jobs by gender": "v2peasjgen",
+      "Access to state business opportunities by gender": "v2peasbgen"
+    },
+    "Exclusion by Urban-Rural Location": {
+      "Power distributed by urban-rural location": "v2pepwrgeo",
+      "Urban-rural location equality in respect for civil liberties": "v2clgeocl",
+      "Access to public services distributed by urban-rural location": "v2peapsgeo",
+      "Access to state jobs by urban-rural location": "v2peasjgeo",
+      "Access to state business opportunities by urban-rural location": "v2peasbegeo"
+    },
+    "Exclusion by Political Group": {
+      "Political group equality in respect for civil liberties": "v2clpolcl",
+      "Access to public services distributed by political group": "v2peapspol",
+      "Access to state jobs by political group": "v2peasjpol",
+      "Access to state business opportunities by political group": "v2peasbepol"
+    },
+    "Exclusion by Social Group": {
+      "Access to public services distributed by social group": "v2peapssoc",
+      "Access to state jobs by social group": "v2peasjsoc",
+      "Access to state business opportunities by social group": "v2peasbsoc"
+    },
+    "Legitimation": {
+      "Ideology": "v2exl_legitideol",
+      "Ideology character": "v2exl_legitideolcr",
+      "Person of the Leader": "v2exl_legitlead",
+      "Performance legitimation": "v2exl_legitperf",
+      "Rational-legal legitimation": "v2exl_legitratio"
+    }
+  },
+  "Civic and Academic Space": {
+    "Civic Space": {
+      "Political polarization": "v2cacamps",
+      "Political violence": "v2caviol",
+      "Freedom of peaceful assembly": "v2caassemb",
+      "State of emergency": "v2casoe"
+    },
+    "Mass Mobilization": {
+      "Mass mobilization": "v2cagenmob",
+      "Mass mobilization concentration": "v2caconmob",
+      "Mobilization for democracy": "v2cademmob",
+      "Mobilization for autocracy": "v2caautmob"
+    },
+    "Citizen Engagement": {
+      "Engagement in state-administered mass organizations": "v2castate",
+      "Engagement in independent trade unions": "v2catrauni",
+      "Engagement in independent political associations": "v2capolit",
+      "Engagement in independent non-political associations": "v2canonpol"
+    },
+    "Academic Space": {
+      "Existence of universities": "v2cauni",
+      "Total number of universities": "v2canuni",
+      "Constitutional protection for academic freedom": "v2caprotac",
+      "Freedom to research and teach": "v2cafres",
+      "Freedom of academic exchange and dissemination": "v2cafexch",
+      "Institutional autonomy": "v2cainsaut",
+      "Campus integrity": "v2casurv",
+      "Academics as critics": "v2cacritic",
+      "International legal commitment to academic freedom under ICESCR": "v2caacadfree"
+    }
+  },
+  "Elections": {
+    "Minimum candidate age lower chamber": "v3canagelc",
+    "Minimum candidate age upper chamber": "v3canageuc",
+    "Minimum voting age presidency": "v3elagepr",
+    "Minimum voting age upper chamber": "v3elageuc",
+    "Voting, voice or ballot": "v3elbalpap",
+    "Ballot printing": "v3elbalstat",
+    "Compulsory voting": "v3elcomvot",
+    "Direct lower chamber (unicameral) elections": "v3eldirelc",
+    "Direct presidential elections": "v3eldirepr",
+    "Direct upper chamber elections": "v3eldireuc",
+    "Secret ballot (de facto)": "v3elecsedf",
+    "Malapportionment legislature/lower chamber": "v3elmalalc",
+    "Malapportionment upper chamber": "v3elmalauc",
+    "Minority or majority government": "v3elncbmaj",
+    "Reapportionment legislature/lower chamber": "v3elreapplc",
+    "Reapportionment upper chamber": "v3elreappuc",
+    "Candidate exclusions (de jure) lower (unicameral) chamber": "v3elrstrlc",
+    "Candidate exclusions (de jure) presidential elections": "v3elrstrpr",
+    "Candidate exclusions (de jure) upper chamber": "v3elrstrup",
+    "De jure ballot secrecy": "v3elsec",
+    "Upper chamber election turnover": "v3eltvriguc",
+    "Upper chamber election seats": "v3elupseat",
+    "Upper chamber election seats won by largest party": "v3elupstsl",
+    "Upper chamber election seats won by second largest party": "v3elupstsm",
+    "Upper chamber election vote share of largest vote-getter": "v3elupvtlg",
+    "Upper chamber election vote share of second-largest vote-getter": "v3elupvtsm",
+    "Suffrage exclusions (de jure) lower (unicameral) chamber": "v3elvstrlc",
+    "Suffrage exclusions (de jure) presidential elections": "v3elvstrpr",
+    "Suffrage exclusions (de jure) upper chamber": "v3elvstruc",
+    "Election women in the cabinet": "v3elwomcab",
+    "Total votes": "v3ttlvote"
+  },
+  "Political Parties": {
+    "Party identification": "v3partyid",
+    "Party age largest": "v3psagefirst",
+    "Party age executive": "v3psagepm",
+    "Party age second largest": "v3psagesecond",
+    "Party age third largest": "v3psagethird"
+  },
+  "The Legislature": {
+    "Lower chamber budget": "v3lgbudglo",
+    "Upper chamber budget": "v3lgbudgup",
+    "Legislature other than uni- or bicameral": "v3lgcamoth",
+    "Lower chamber in session": "v3lginses",
+    "Upper chamber in session": "v3lginsesup",
+    "Lower chamber quota for social groups": "v3lgqumin"
+  },
+  "The Judiciary": {
+    "High court existence": "v3juhcourt"
+  },
+  "Civil Liberty": {
+    "Labor rights": "v3cllabrig",
+    "Slavery": "v3clslavery",
+    "Serfdom de jure/slavery de jure": "v3serfdeju"
+  },
+  "Sovereignty/State": {
+    "Census": "v3stcensus",
+    "Citizenship laws": "v3stcitlaw",
+    "Flag": "v3stflag",
+    "National anthem": "v3stnatant",
+    "National bank": "v3stnatbank",
+    "Rulers’ involvement in the state administration": "v3struinvadm",
+    "Statistical agency": "v3ststatag",
+    "State steering capacity": "v3ststeecap",
+    "Statistical yearbook covered": "v3ststybcov",
+    "Statistical yearbook published": "v3ststybpub"
+  },
+  "Political Equality": {
+    "Equal vote legislature/lower chamber": "v3equavolc",
+    "Equal vote upper chamber": "v3equavouc",
+    "Child labor laws": "v3pechilabl",
+    "Minimum wage": "v3peminwage",
+    "Minimum wage restriction": "v3peminwagerestr"
+  },
+  "Historical V-Dem Modified": {
+    "Lower chamber electoral system": "v3elloelsy",
+    "Lower chamber election seats": "v3elloseat",
+    "Lower chamber election seats won by largest party": "v3ellostlg",
+    "Lower chamber election seat share won by largest party": "v3ellostsl",
+    "Lower chamber election seats won by second largest party": "v3ellostsm",
+    "Lower chamber election seat share won by second largest party": "v3ellostss",
+    "Lower chamber election vote share of largest vote-getter": "v3ellovtlg",
+    "Lower chamber election vote share of second-largest vote-getter": "v3ellovtsm",
+    "Effective number of cabinet parties": "v3elncbpr",
+    "Election turnout": "v3eltrnout",
+    "Lower chamber election turnover": "v3eltvrig",
+    "Election type": "v3eltype",
+    "Presidential election vote share of largest vote-getter": "v3elvotlrg",
+    "Presidential election vote share of second-largest vote-getter": "v3elvotsml",
+    "Legislature bicameral": "v3lgbicam",
+    "Lower chamber committees": "v3lgcomslo",
+    "Legislature corrupt activities": "v3lgcrrpt",
+    "Legislature dominant chamber": "v3lgdomchm",
+    "Upper chamber elected": "v3lgelecup",
+    "Lower chamber elected": "v3lgello",
+    "Legislature controls resources": "v3lgfunds",
+    "Lower chamber indirectly elected": "v3lginello",
+    "Upper chamber indirectly elected": "v3lginelup",
+    "Legislature investigates in practice": "v3lginvstp",
+    "Lower chamber legislates in practice": "v3lglegplo",
+    "Upper chamber legislates in practice": "v3lglegpup",
+    "Lower chamber legislature name": "v3lgnamelo",
+    "Upper chamber name": "v3lgnameup",
+    "Legislature opposition parties": "v3lgoppart",
+    "Executive oversight": "v3lgotovst",
+    "Legislature questions officials in practice": "v3lgqstexp",
+    "Lower chamber members serve in government": "v3lgsrvlo"
+  },
+  "Historical V-Dem – Overlap Period Discrepancies": {
+    "Local government elected": "v3ellocelc",
+    "Local government exists": "v3ellocgov",
+    "Local government name": "v3ellocnam",
+    "Regional government exists": "v3elreggov",
+    "Regional government name": "v3elregnam",
+    "Regional government elected": "v3elsrgel",
+    "HOS age": "v3exagehos",
+    "HOS = HOG": "v3exhoshog",
+    "HOG name": "v3exnamhog",
+    "HOS name": "v3exnamhos",
+    "HOS appointment in practice": "v3expathhs",
+    "Title of HOG": "v3extithog",
+    "HOS title": "v3extithos",
+    "High court name": "v3juhcname",
+    "Legislature amends constitution": "v3lgamend",
+    "Legislature amnesties": "v3lgamnsty",
+    "Lower chamber introduces bills": "v3lgintblo",
+    "Lower chamber legislates by law": "v3lglegllo",
+    "Upper chamber legislates by law": "v3lgleglup"
+  },
+  "Regimes of the World": {
+    "Regimes of the world – the RoW measure": "v2x_regime",
+    "Regimes of the world – the RoW measure with categories for ambiguous cases": "v2x_regime_amb"
+  },
+  "Accountability": {
+    "Accountability index": "v2x_accountability",
+    "Vertical accountability index": "v2x_veracc",
+    "Diagonal accountability index": "v2x_diagacc",
+    "Horizontal accountability index": "v2x_horacc"
+  },
+  "Executive Bases of Power": {
+    "Confidence dimension index": "v2x_ex_confidence",
+    "Direct election dimension index": "v2x_ex_direlect",
+    "Hereditary dimension index": "v2x_ex_hereditary",
+    "Military dimension index": "v2x_ex_military",
+    "Ruling party dimension index": "v2x_ex_party"
+  },
+  "Neopatrimonialism": {
+    "Neopatrimonial Rule Index": "v2x_neopat",
+    "Clientelism Index": "v2xnp_client",
+    "Presidentialism Index": "v2xnp_pres",
+    "Regime corruption": "v2xnp_regcorr"
+  },
+  "Civil liberties": {
+    "Civil liberties index": "v2x_civlib",
+    "Physical violence index": "v2x_clphy",
+    "Political civil liberties index": "v2x_clpol",
+    "Private civil liberties index": "v2x_clpriv"
+  },
+  "Exclusion": {
+    "Exclusion by Socio-Economic Group": "v2xpe_exlecon",
+    "Exclusion by Gender index": "v2xpe_exlgender",
+    "Exclusion by Urban-Rural Location index": "v2xpe_exlgeo",
+    "Exclusion by Political Group index": "v2xpe_exlpol",
+    "Exclusion by Social Group index": "v2xpe_exlsocgr"
+  },
+  "Corruption": {
+    "Political corruption index": "v2x_corr",
+    "Executive corruption index": "v2x_execorr",
+    "Public sector corruption index": "v2x_pubcorr"
+  },
+  "Women’s Empowerment": {
+    "Women political empowerment index": "v2x_gender",
+    "Women civil liberties index": "v2x_gencl",
+    "Women civil society participation index": "v2x_gencs",
+    "Women political participation index": "v2x_genpp"
+  },
+  "Rule of Law": {
+    "Rule of law index": "v2x_rule",
+    "Access to justice": "v2xcl_acjst",
+    "Property rights": "v2xcl_prpty"
+  },
+  "Direct Democracy": {
+    "Popular initiative index": "v2xdd_i_ci",
+    "Popular referendum index": "v2xdd_i_rf",
+    "Obligatory referendum index": "v2xdd_i_or",
+    "Plebiscite index": "v2xdd_i_pl",
+    "Citizen-initiated component of direct popular vote index": "v2xdd_cic",
+    "Top-Down component of direct popular vote index": "v2xdd_toc"
+  },
+  "Civil Society": {
+    "Core civil society index": "v2xcs_ccsi"
+  },
+  "Elections": {
+    "Electoral regime index": "v2x_elecreg",
+    "Executive electoral regime index": "v2xex_elecreg",
+    "Legislative electoral regime index": "v2xlg_elecreg",
+    "Electoral component index": "v2x_EDcomp_thick",
+    "Freedom of expression index": "v2x_freexp",
+    "Presidential election aborted": "v2x_hosabort",
+    "Chief executive no longer elected": "v2x_hosinter",
+    "Legislative or constituent assembly election aborted": "v2x_legabort",
+    "Freedom of discussion": "v2xcl_disc",
+    "Freedom of domestic movement": "v2xcl_dmove",
+    "Freedom from forced labor": "v2xcl_slave",
+    "Legislative or constituent assembly election": "v2xel_elecparl",
+    "Presidential election": "v2xel_elecpres",
+    "Legislature directly elected": "v2xex_elecleg",
+    "Legislature closed down or aborted": "v2xlg_leginter",
+    "Alternative sources of information index": "v2xme_altinf"
+  },
+  "Party Institutionalization": {
+    "Party institutionalization index": "v2xps_party"
+  },
+  "Consensual Democracy Dimensions": {
+    "Divided party control index": "v2x_divparctrl",
+    "Division of power index": "v2x_feduni"
+  },
+  "Academic Freedom": {
+    "Academic Freedom Index": "v2xca_academ"
+  },
+  "Party-System Democracy Index": "v2xpas_democracy",
+  "Government Coalition Democracy Index": "v2xpas_democracy_government",
+  "Opposition Parties Democracy Index": "v2xpas_democracy_opposition",
+  "Party-System Religion Index": "v2xpas_religion",
+  "Government Coalition Religion Index": "v2xpas_religion_government",
+  "Opposition Parties Religion Index": "v2xpas_religion_opposition",
+  "Party-System Exclusion Index": "v2xpas_exclusion",
+  "Government Coalition Party-System Exclusion Index": "v2xpas_exclusion_government",
+  "Opposition Parties Party-System Exclusion Index": "v2xpas_exclusion_opposition",
+  "Party-System Left-Right Index": "v2xpas_economic",
+  "Government Coalition Left-Right Index": "v2xpas_economic_government",
+  "Opposition Parties Left-Right Index": "v2xpas_economic_opposition",
+  "Coordinated Information Operations": {
+    "Government dissemination of false information domestic": "v2smgovdom",
+    "Government dissemination of false information abroad": "v2smgovab",
+    "Party dissemination of false information domestic": "v2smpardom",
+    "Party dissemination of false information abroad": "v2smparab",
+    "Foreign governments dissemination of false information": "v2smfordom",
+    "Foreign governments ads": "v2smforads"
+  },
+  "Digital Media Freedom": {
+    "Government Internet filtering capacity": "v2smgovfilcap",
+    "Government Internet filtering in practice": "v2smgovfilprc",
+    "Government Internet shut down capacity": "v2smgovshutcap",
+    "Government Internet shut down in practice": "v2smgovshut",
+    "Government social media shut down in practice": "v2smgovsm",
+    "Government social media alternatives": "v2smgovsmalt",
+    "Government social media monitoring": "v2smgovsmmon",
+    "Government social media censorship in practice": "v2smgovsmcenprc",
+    "Government cyber security capacity": "v2smgovcapsec",
+    "Political parties cyber security capacity": "v2smpolcap"
+  },
+  "State Internet Regulation Capacity and Approach": {
+    "Internet legal regulation content": "v2smregcon",
+    "Privacy protection by law exists": "v2smprivex",
+    "Privacy protection by law content": "v2smprivcon",
+    "Government capacity to regulate online content": "v2smregcap",
+    "Government online content regulation approach": "v2smregapp",
+    "Defamation protection": "v2smlawpr",
+    "Abuse of defamation and copyright law by elites": "v2smdefabu"
+  },
+  "Online Media Polarization": {
+    "Online media existence": "v2smonex",
+    "Online media perspectives": "v2smonper",
+    "Online media fractionalization": "v2smmefra"
+  },
+  "Social Cleavages": {
+    "Online harassment groups": "v2smhargr",
+    "Other online harassment groups": "v2smhargrtxt",
+    "Use of social media to organize offline violence": "v2smorgviol",
+    "Average people’s use of social media to organize offline action": "v2smorgavgact",
+    "Elites’ use of social media to organize offline action": "v2smorgelitact",
+    "Types of organization through social media": "v2smorgtypes",
+    "Other types of organization through social media": "v2smorgtypestxt",
+    "Party/candidate use of social media in campaigns": "v2smcamp",
+    "Arrests for political content": "v2smarrest",
+    "Polarization of society": "v2smpolsoc",
+    "Political parties hate speech": "v2smpolhate"
+  },
+  "Indoctrination Indices": {
+    "Indoctrination potential in education": "v2xed_ed_inpt",
+    "Political education effort in education": "v2xed_ed_poed",
+    "Indoctrination coherence in education": "v2xed_ed_inco",
+    "Centralization of the education system": "v2xed_ed_cent",
+    "Control over educational agents": "v2xed_ed_ctag",
+    "Indoctrination content in education": "v2xed_ed_con",
+    "Democratic indoctrination content in education": "v2xed_ed_dmcon",
+    "Patriotic indoctrination content in education": "v2xed_ed_ptcon",
+    "Patriotic indoctrination content in education and the media": "v2xed_ptcon",
+    "Indoctrination potential in education and the media": "v2xedvd_inpt",
+    "Indoctrination coherence (potential) in the media": "v2xedvd_me_inco",
+    "Centralization of media control": "v2xedvd_me_cent",
+    "Control over media agents": "v2xedvd_me_ctag"
+  },
+  "General Curriculum": {
+    "Centralized curriculum": "v2edcentcurrlm",
+    "Centralized textbook approval": "v2edcenttxbooks"
+  },
+  "Specialized Subject Curriculum": {
+    "Political education, primary school": "v2edpoledprim",
+    "Political education, secondary school": "v2edpoledsec",
+    "Political rights and duties in the curriculum": "v2edpoledrights",
+    "Patriotic education in the curriculum": "v2edpatriot",
+    "Ideology in the curriculum": "v2edideol",
+    "Ideology character in the curriculum": "v2edideolch_rec",
+    "Pluralism in the curriculum": "v2edplural",
+    "Critical engagement with education content": "v2edcritical",
+    "Teacher autonomy in the classroom": "v2edteautonomy",
+    "Mathematics and science education": "v2edmath"
+  },
+  "Teachers": {
+    "Education requirements for primary school teachers": "v2edtequal",
+    "Teacher inspection": "v2temonitor",
+    "Presence of teacher unions": "v2edteunion",
+    "Independent teacher unions": "v2edteunionindp",
+    "Political teacher hiring": "v2edtehire",
+    "Political teacher firing": "v2edtefire"
+  },
+  "Schools": {
+    "Presence of patriotic symbols in schools": "v2edscpatriot",
+    "Celebration of patriotic symbols": "v2edscpatriotcb",
+    "Extracurricular activities": "v2edscextracurr"
+  },
+  "Media": {
+    "State-owned print media": "v2medstateprint",
+    "State-owned broadcast media": "v2medstatebroad",
+    "Political influence, state-owned media": "v2medpolstate",
+    "Political influence, non state-owned media": "v2medpolnonstate",
+    "Patriotism in the media": "v2medpatriot",
+    "Control of entertainment content": "v2medentrain"
+  },
+  "Ordinal Versions of Indices": {
+    "Additive polyarchy index ordinal": "e_v2x_api",
+    "Civil liberties index ordinal": "e_v2x_civlib",
+    "Physical violence index ordinal": "e_v2x_clphy",
+    "Political civil liberties index ordinal": "e_v2x_clpol",
+    "Private liberties index ordinal": "e_v2x_clpriv",
+    "Political corruption index ordinal": "e_v2x_corr",
+    "Civil society participation index ordinal": "e_v2x_cspart",
+    "Deliberative democracy index ordinal": "e_v2x_delibdem",
+    "Electoral component index ordinal": "e_v2x_EDcomp_thick",
+    "Egalitarian component index ordinal": "e_v2x_egal",
+    "Egalitarian democracy index ordinal": "e_v2x_egaldem",
+    "Elected officials index (de jure) ordinal": "e_v2x_elecoff",
+    "Executive corruption index ordinal": "e_v2x_execorr",
+    "Division of power index ordinal": "e_v2x_feduni",
+    "Freedom of association (thick) index ordinal": "e_v2x_frassoc_thick",
+    "Freedom of expression index ordinal": "e_v2x_freexp",
+    "Expanded freedom of expression index ordinal": "e_v2x_freexp_altinf",
+    "Women civil liberties index ordinal": "e_v2x_gencl",
+    "Women civil society participation index ordinal": "e_v2x_gencs",
+    "Women political empowerment index ordinal": "e_v2x_gender",
+    "Women political participation index ordinal": "e_v2x_genpp",
+    "Judicial constraints on the executive index ordinal": "e_v2x_jucon",
+    "Liberal democracy index ordinal": "e_v2x_libdem",
+    "Liberal component index ordinal": "e_v2x_liberal",
+    "Multiplicative polyarchy index ordinal": "e_v2x_mpi",
+    "Participatory component index ordinal": "e_v2x_partip",
+    "Participatory democracy index ordinal": "e_v2x_partipdem",
+    "Electoral democracy index ordinal": "e_v2x_polyarchy",
+    "Public sector corruption index ordinal": "e_v2x_pubcorr",
+    "Share of population with suffrage ordinal": "e_v2x_suffr",
+    "Equality before the law and individual liberty index ordinal": "e_v2xcl_rol",
+    "Core civil society index ordinal": "e_v2xcs_ccsi",
+    "Direct popular vote index ordinal": "e_v2xdd_dd",
+    "Deliberative component index ordinal": "e_v2xdl_delib",
+    "Equal distribution of resources index ordinal": "e_v2xeg_eqdr",
+    "Equal protection index ordinal": "e_v2xeg_eqprotec",
+    "Clean elections index ordinal": "e_v2xel_frefair",
+    "Local government index ordinal": "e_v2xel_locelec",
+    "Regional government index ordinal": "e_v2xel_regelec",
+    "Legislative constraints on the executive index ordinal": "e_v2xlg_legcon",
+    "Alternative sources of information index ordinal": "e_v2xme_altinf",
+    "Party institutionalization index ordinal": "e_v2xps_party"
+  },
+  "Political Regimes": {
+    "Democracy (BMR)": "e_boix_regime",
+    "Democratic breakdowns": "e_democracy_breakdowns",
+    "Omitted data": "e_democracy_omitteddata",
+    "Democratic transition": "e_democracy_trans"
+  },
+  "Freedom House": {
+    "Civil liberties": "e_fh_cl",
+    "Political rights": "e_fh_pr",
+    "Rule of law": "e_fh_rol",
+    "Status": "e_fh_status"
+  },
+  "World Bank Governance Indicators": {
+    "Control of corruption — estimate": "e_wbgi_cce",
+    "Government effectiveness": "e_wbgi_gee",
+    "Political stability — estimate": "e_wbgi_pve",
+    "Rule of law — estimate": "e_wbgi_rle",
+    "Regulatory quality — estimate": "e_wbgi_rqe",
+    "Voice and accountability — estimate": "e_wbgi_vae"
+  },
+  "Lexical Index of Electoral Democracy": {
+    "Lexical index": "e_lexical_index"
+  },
+  "Unified Democracy Score": {
+    "Unified democracy score posterior": "e_uds"
+  },
+  "Political Institutions and Political Events": {
+    "Coups": "e_coups",
+    "Number of Parties in legislature": "e_legparty"
+  },
+  "Polity 5": {
+    "Institutionalized autocracy": "e_autoc",
+    "Institutionalized democracy": "e_democ",
+    "Polity combined score": "e_p_polity",
+    "Political competition": "e_polcomp",
+    "Polity revised combined score": "e_polity2"
+  },
+  "Others": {
+    "Democratic breakdown": "e_bnr_dem",
+    "Democracy": "e_chga_demo",
+    "Corruption perception index": "e_ti_cpi",
+    "Index of Democratization": "e_vanhanen"
+  },
+  "Education": {
+    "Education 15+": "e_peaveduc",
+    "Educational inequality, Gini": "e_peedgini"
+  },
+  "Geography": {
+    "Land area": "e_area",
+    "Region (geographic)": "e_regiongeo",
+    "Region (politico-geographic)": "e_regionpol",
+    "Region (politico-geographic 6-category)": "e_regionpol_6C",
+    "Region (politico-geographic 7-category)": "e_regionpol_7C"
+  },
+  "Economics": {
+    "Exports": "e_cow_exports",
+    "Imports": "e_cow_imports",
+    "GDP": "e_gdp",
+    "GDP per capita": "e_gdppc",
+    "Inflation": "e_miinflat",
+    "Population": "e_pop"
+  },
+  "Natural Resource Wealth": {
+    "Petroleum, coal, and natural gas production per capita": "e_total_fuel_income_pc",
+    "Petroleum production per capita": "e_total_oil_income_pc",
+    "Petroleum, coal, natural gas, and metals production per capita": "e_total_resources_income_pc"
+  },
+  "Infrastructure": {
+    "Radios": "e_radio_n"
+  },
+  "Demography": {
+    "Fertility rate": "e_miferrat",
+    "Population total": "e_mipopula",
+    "Urbanization": "e_miurbani",
+    "Urban population": "e_miurbpop",
+    "Child mortality rate": "e_pechmor",
+    "Life expectancy, female": "e_pefeliex",
+    "Life expectancy": "e_pelifeex",
+    "Maternal mortality rate": "e_pematmor",
+    "Population": "e_wb_pop"
+  },
+  "Conflict": {
+    "Civil war": "e_civil_war",
+    "Armed conflict, international": "e_miinteco",
+    "Armed conflict, internal": "e_miinterc",
+    "Number of successful coup attempts in a year": "e_pt_coup",
+    "Number of coups attempts in a year": "e_pt_coup_attempts"
+  }
+}

@@ -1,5 +1,6 @@
 // Variable name to code mappings for the V-Dem API
-export const VARIABLE_NAME_TO_CODE: Record<string, string> = {
+// 1) Start with the existing curated base mapping (kept for stability)
+const BASE_MAPPING: Record<string, string> = {
   // V-Dem High-Level Democracy Indices
   "Electoral democracy index": "v2x_polyarchy",
   "Liberal democracy index": "v2x_libdem",
@@ -266,16 +267,73 @@ export const VARIABLE_NAME_TO_CODE: Record<string, string> = {
   "Strongest anti-regime preferences": "v2regantireg",
   "Most powerful group in affecting regime duration and change": "v2regpower",
 
-  // Add more mappings as needed...
-  // Civil Liberty, Sovereignty/State, Civil Society, Media, Political Equality, etc.
-  
   // Access to justice for men
   "Access to justice for men": "v2clacjstm",
   // Access to state jobs by urban-rural location
   "Access to state jobs by urban-rural location": "v2peasjgeo"
 };
 
-// Reverse mapping: code to name
+// 2) Augment with translations.json (authoritative list from the user)
+// Note: translations.json contains duplicate top-level keys (e.g., "Elections").
+// Import the raw file content and regex-extract all leaf "label": "code" pairs to avoid losing earlier sections.
+// Vite provides ?raw imports that return the file as a string.
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore - Vite's ?raw is supported at build time
+import translationsRaw from '../translations.json?raw';
+
+function buildMapFromTranslationsRaw(raw: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  const pairRe = /"([^"]+)"\s*:\s*"([A-Za-z0-9_]+)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = pairRe.exec(raw)) !== null) {
+    const label = m[1];
+    const code = m[2];
+    // Only keep plausible codes (v2*, v3*, e_*)
+    if (/^(v\d|e_)/i.test(code)) {
+      map[label] = code;
+    }
+  }
+  return map;
+}
+
+const TRANSLATION_NAME_TO_CODE = buildMapFromTranslationsRaw(String(translationsRaw || ''));
+
+// 3) Manual overrides for items the user flagged as having potentially false codes.
+// These take precedence and are easy to edit by hand.
+const MANUAL_OVERRIDES: Record<string, string> = {
+  // Elections & Voting -> Subnational (user flagged: "false code?")
+  // FIXME: verify these codes in the backend; some may be non-numeric or use different fields.
+  "Subnational election area less free and fair name": "v2elsnless",
+  "Subnational election area less free and fair characteristics": "v2elsnlfc",
+  "Subnational election area more free and fair name": "v2elsnmore",
+  "Subnational election area more free and fair characteristics": "v2elsnmrfc",
+
+  // Political Parties & Competition -> General
+  // FIXME: verify mapping for target classification
+  "Party ban target": "v2psbantar",
+
+  // Executive Power -> Head of State (user flagged: verify these four)
+  // FIXME: double-check HOS/HOG "other" vs "other body" variants
+  "HOS removal by other in practice": "v2exrmhsol",
+  "HOS other body remove HOS in practice": "v2exrmhsnl",
+  "HOS control over": "v2exctlhs",
+  "HOS other body controls": "v2exctlhos",
+
+  // Executive Power -> Head of Government (user flagged: verify these four)
+  "HOG removal by other in practice": "v2exrmhgnp",
+  "HOG other body remove HOG in practice": "v2exrmhgop",
+  "HOG control over": "v2exctlhg",
+  "HOG other body controls": "v2exctlhog"
+};
+
+// Final name->code map: base, then translations, then manual overrides.
+export const VARIABLE_NAME_TO_CODE: Record<string, string> = {
+  ...BASE_MAPPING,
+  ...TRANSLATION_NAME_TO_CODE,
+  ...MANUAL_OVERRIDES
+};
+
+// Reverse mapping: code to name (built after merges)
 export const VARIABLE_CODE_TO_NAME: Record<string, string> = Object.fromEntries(
   Object.entries(VARIABLE_NAME_TO_CODE).map(([name, code]) => [code, name])
 );
