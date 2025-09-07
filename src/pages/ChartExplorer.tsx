@@ -23,18 +23,6 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
   type ChartRow = { year: number } & Record<string, number | null>;
   const [chartDataByVar, setChartDataByVar] = useState<Record<string, ChartRow[]>>({});
 
-  // Default countries when entering via Explore Data with none selected
-  const DEFAULT_COUNTRIES = ['moldova', 'serbia', 'romania'];
-  useEffect(() => {
-    if ((currentQuery.countries?.length ?? 0) === 0) {
-      onQueryChange({
-        ...currentQuery,
-        countries: DEFAULT_COUNTRIES
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentQuery.countries]);
-
   // Load chart data
   useEffect(() => {
     let cancelled = false;
