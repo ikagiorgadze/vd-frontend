@@ -2,7 +2,7 @@ import { getVariableName } from '@/lib/variable-codes';
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Download, Link2 } from 'lucide-react';
+import { Download, Link2, Filter, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ChartSidebar from '@/components/ChartSidebar';
 import { fetchVDemData, VDemDataPoint } from '@/lib/data';
@@ -22,6 +22,8 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
   const [loading, setLoading] = useState(true);
   type ChartRow = { year: number } & Record<string, number | null>;
   const [chartDataByVar, setChartDataByVar] = useState<Record<string, ChartRow[]>>({});
+  // Mobile-only: whether filters sidebar is open
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   // Load chart data
   useEffect(() => {
@@ -154,12 +156,19 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="grid grid-cols-[13fr_1fr_6fr] gap-0 p-4 h-[calc(100vh-64px)] overflow-hidden min-h-0">
+      <div className="grid grid-cols-1 sm:grid-cols-[13fr_1fr_6fr] gap-0 p-4 h-[calc(100vh-64px)] overflow-hidden min-h-0">
     {/* Left: Chart area (65%) */}
-  <div className="pr-4 min-h-0 h-full overflow-y-auto">
+  <div className="pr-0 sm:pr-4 min-h-0 h-full overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-2xl font-bold">Chart View</h1>
+            </div>
+            {/* Mobile-only Filters button */}
+            <div className="sm:hidden">
+              <Button variant="outline" size="sm" onClick={() => setMobileFiltersOpen(true)}>
+                <Filter className="h-4 w-4 mr-2" />
+                Filters
+              </Button>
             </div>
           </div>
 
@@ -287,13 +296,29 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
 
           {/* Notes moved into each chart panel */}
         </div>
-        {/* Middle gap (5%) */}
-        <div />
-    {/* Right: Sidebar (30%) */}
-  <div id="sidebar-scroll-container" className="h-full overflow-y-auto min-h-0">
+        {/* Middle gap (5%) - hidden on mobile */}
+        <div className="hidden sm:block" />
+    {/* Right: Sidebar (30%) - hidden on mobile */}
+  <div id="sidebar-scroll-container" className="hidden sm:block h-full overflow-y-auto min-h-0">
           <ChartSidebar currentQuery={currentQuery} onQueryChange={handleQueryUpdate} />
         </div>
       </div>
+
+      {/* Mobile full-screen Filters overlay */}
+      {mobileFiltersOpen && (
+        <div className="fixed inset-0 z-50 bg-background sm:hidden flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b border-border">
+            <h2 className="text-lg font-semibold">Filters</h2>
+            <Button variant="outline" size="sm" onClick={() => setMobileFiltersOpen(false)}>
+              <X className="h-4 w-4 mr-2" />
+              Close
+            </Button>
+          </div>
+          <div id="mobile-sidebar-scroll-container" className="flex-1 overflow-y-auto min-h-0">
+            <ChartSidebar currentQuery={currentQuery} onQueryChange={handleQueryUpdate} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
