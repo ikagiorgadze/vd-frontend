@@ -190,7 +190,9 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
       const el = rowRefs.current[item.key];
       if (el) {
         el.focus({ preventScroll: true });
-        const container = document.getElementById('sidebar-scroll-container');
+        const container =
+          document.getElementById('sidebar-scroll-container') ||
+          document.getElementById('mobile-sidebar-scroll-container');
         if (container) {
           (el as HTMLElement).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
@@ -334,7 +336,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
     const maxAttempts = 60; // ~1 second at 60fps
 
     const tryScroll = () => {
-  const container = document.getElementById('sidebar-scroll-container') as HTMLElement | null;
+  const container = (document.getElementById('sidebar-scroll-container') || document.getElementById('mobile-sidebar-scroll-container')) as HTMLElement | null;
       const el = measureRefs.current[code] || document.getElementById(`measure-${code}`);
       if (container && el) {
         // Scroll the element into view within the sidebar container
