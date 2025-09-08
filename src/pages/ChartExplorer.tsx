@@ -2,7 +2,7 @@ import { getVariableName } from '@/lib/variable-codes';
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Download, Link2, Filter, X, Check } from 'lucide-react';
+import { Download, Link2, Filter, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ChartSidebar from '@/components/ChartSidebar';
 import { fetchVDemData, VDemDataPoint } from '@/lib/data';
@@ -24,8 +24,6 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
   const [chartDataByVar, setChartDataByVar] = useState<Record<string, ChartRow[]>>({});
   // Mobile-only: whether filters sidebar is open
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  // Copy link UI state
-  const [copied, setCopied] = useState(false);
 
   // Load chart data
   useEffect(() => {
@@ -148,19 +146,12 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
     URL.revokeObjectURL(url);
   };
 
-  const handleShareLink = async () => {
+  const handleShareLink = () => {
     const url = window.location.href;
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-      try {
-        await navigator.clipboard.writeText(url);
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1500);
-      } catch (e) {
-        console.error('Clipboard copy failed:', e);
-      }
-    } else {
-      console.warn('Clipboard API not available in this environment.');
-    }
+    navigator.clipboard.writeText(url).then(() => {
+      // You could add a toast notification here
+      console.log('Link copied to clipboard');
+    });
   };
 
   return (
@@ -292,25 +283,9 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
                         <Download className="h-4 w-4 mr-2" />
                         Download CSV
                       </Button>
-                      <Button
-                        variant={copied ? 'secondary' : 'outline'}
-                        className={copied ? 'bg-green-600 text-white hover:bg-green-600' : ''}
-                        size="sm"
-                        onClick={handleShareLink}
-                        disabled={copied}
-                        aria-live="polite"
-                      >
-                        {copied ? (
-                          <>
-                            <Check className="h-4 w-4 mr-2" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Link2 className="h-4 w-4 mr-2" />
-                            Copy Share Link
-                          </>
-                        )}
+                      <Button variant="outline" size="sm" onClick={handleShareLink}>
+                        <Link2 className="h-4 w-4 mr-2" />
+                        Copy Share Link
                       </Button>
                     </div>
                   </div>
