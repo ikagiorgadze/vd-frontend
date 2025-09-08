@@ -183,3 +183,19 @@ All colors MUST be HSL.
            text-xs font-medium;
   }
 }
+
+/* Mobile-only: restrict touch to vertical scroll to avoid slight page panning */
+@layer base {
+  @media (max-width: 639px) {
+    html, body {
+      touch-action: pan-y !important; /* allow only vertical panning */
+      overscroll-behavior-x: none;     /* prevent horizontal overscroll */
+      overflow-x: hidden;              /* hide accidental horizontal overflow */
+    }
+    /* Avoid scroll chaining from inner scrollers to the page */
+    #root {
+      overscroll-behavior: contain;
+      touch-action: pan-y;
+    }
+  }
+}
