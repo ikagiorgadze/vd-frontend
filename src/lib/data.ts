@@ -1,5 +1,6 @@
 import { apiService, ApiQueryRequest, ApiDataPoint } from './api';
 import { getVariableCode, getVariableName } from './variable-codes';
+import { getImfVariableCode, IMF_NEA_CODE_TO_DESC } from './imf-codes';
 import { getCountryById } from './countries';
 
 export interface VDemDataPoint {
@@ -15,9 +16,18 @@ function transformApiData(
   variable: string, 
   countries: string[]
 ): VDemDataPoint[] {
-  const variableCode = getVariableCode(variable);
+  // Attempt to resolve as V-Dem code first, then IMF
+  let variableCode = getVariableCode(variable);
   if (!variableCode) {
-    console.warn(`No code found for variable: ${variable}`);
+    const imf = getImfVariableCode(variable);
+    if (imf) variableCode = imf;
+  }
+  // If still not found but looks like an IMF code pattern, use raw
+  if (!variableCode && /^[A-Z0-9_]+(\.[A-Z0-9]+){1,4}$/.test(variable)) {
+    variableCode = variable;
+  }
+  if (!variableCode) {
+    console.warn(`No code found for variable (VDem/IMF): ${variable}`);
     return [];
   }
 
@@ -108,9 +118,17 @@ export async function fetchVDemData(
     return [];
   }
   // Get variable code for API
-  const variableCode = getVariableCode(variable);
+  // Primary: V-Dem variable code mapping; Fallback: IMF datasets (WEO/NEA) mapping
+  let variableCode = getVariableCode(variable);
   if (!variableCode) {
-    console.warn(`No API code found for variable: ${variable}, using sample data`);
+    const imfCode = getImfVariableCode(variable);
+    if (imfCode) {
+      variableCode = imfCode;
+    }
+  }
+
+  if (!variableCode) {
+    console.warn(`No API (VDem or IMF) code found for variable: ${variable}, using sample data`);
     return generateSampleData(countries, variable, Array.from(
       { length: endYear - startYear + 1 }, 
       (_, i) => startYear + i
@@ -131,7 +149,16 @@ export async function fetchVDemData(
   };
 
   try {
-    const apiData = await apiService.query(apiRequest);
+    // Decide which endpoint to hit: IMF codes use uppercase with dots; V-Dem codes start with v2/v3 or e_ etc.
+    const isImf = /[A-Z]/.test(variableCode) && /\./.test(variableCode) && !/^v\d|^e_/i.test(variableCode);
+    let apiData: ApiDataPoint[];
+    if (isImf) {
+      // Detect NEA vs WEO: NEA codes in our list IMF_NEA_CODE_TO_DESC
+      const isNea = !!IMF_NEA_CODE_TO_DESC[variableCode];
+      apiData = await apiService.queryImf(apiRequest, { isNea });
+    } else {
+      apiData = await apiService.query(apiRequest);
+    }
     return transformApiData(apiData, variable, countries);
   } catch (error) {
     console.error('API call failed, falling back to sample data:', error);
