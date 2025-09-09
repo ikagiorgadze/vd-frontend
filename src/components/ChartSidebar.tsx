@@ -12,6 +12,7 @@ import { getVariableById, getSubcategoryById } from '@/lib/variables';
 import { getMeasurePathByCode, getMeasurePathByLabel } from '@/lib/measure-index';
 import { getVariableName } from '@/lib/variable-codes';
 import { PlusSquare, MinusSquare, X } from 'lucide-react';
+import { IMF_WEO_CODE_TO_DESC, IMF_NEA_CODE_TO_DESC } from '@/lib/imf-codes';
 
 interface ChartSidebarProps {
   currentQuery: QueryState;
@@ -23,6 +24,11 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
   const [selectedCategory, setSelectedCategory] = useState<VDemCategory | 'all'>(currentQuery.category || 'all');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>(currentQuery.subcategory || '');
   const [expandedCategories, setExpandedCategories] = useState<Set<VDemCategory>>(new Set());
+  // Dataset grouping: currently only V-Dem Dataset. Keep structure to add more later (e.g., IMF Dataset)
+  const VDEM_DATASET_KEY = 'dataset::vdem';
+  const IMF_DATASET_KEY = 'dataset::imf';
+  const [expandedDatasets, setExpandedDatasets] = useState<Set<string>>(new Set([VDEM_DATASET_KEY]));
+  const [expandedImfCategories, setExpandedImfCategories] = useState<Set<string>>(new Set());
   const [expandedSubcats, setExpandedSubcats] = useState<Set<string>>(new Set());
   const [pendingScrollCode, setPendingScrollCode] = useState<string | null>(null);
   const scrollRetry = useRef(0);
@@ -148,36 +154,62 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
 
   type VisibleItem =
     | { key: string; type: 'all'; level: 1 }
-    | { key: string; type: 'category'; level: 1; cat: VDemCategory }
-    | { key: string; type: 'subcategory'; level: 2; cat: VDemCategory; sub: string }
-    | { key: string; type: 'variable'; level: 3; cat: VDemCategory; sub: string; code: string };
+    | { key: string; type: 'dataset'; level: 1; dataset: string }
+    | { key: string; type: 'category'; level: 2; cat: VDemCategory }
+    | { key: string; type: 'subcategory'; level: 3; cat: VDemCategory; sub: string }
+    | { key: string; type: 'variable'; level: 4; cat: VDemCategory; sub: string; code: string }
+    | { key: string; type: 'imfCategory'; level: 2; dataset: 'IMF Dataset'; catKey: string; label: string }
+    | { key: string; type: 'imfVariable'; level: 3; dataset: 'IMF Dataset'; catKey: string; code: string; label: string };
 
   const visibleItems: VisibleItem[] = useMemo(() => {
     const items: VisibleItem[] = [];
     items.push({ key: 'all', type: 'all', level: 1 });
-    for (const cat of CATEGORIES) {
-      const catKey = `cat::${cat}`;
-      items.push({ key: catKey, type: 'category', level: 1, cat });
-      if (expandedCategories.has(cat)) {
-        const subs = getSubcategoriesForCategory(cat);
-        for (const sub of subs) {
-          const subKey = `${cat}::${sub}`;
-          const nodeKey = `sub::${subKey}`;
-          items.push({ key: nodeKey, type: 'subcategory', level: 2, cat, sub });
-          if (expandedSubcats.has(subKey)) {
-            const vars = getVariables(cat, sub);
-            for (const v of vars) {
-              const code = getVariableCode(v) ?? v;
-              if (code && HIDDEN_VARIABLE_CODES.has(code)) continue;
-              const varKey = `var::${code}`;
-              items.push({ key: varKey, type: 'variable', level: 3, cat, sub, code });
+    // Dataset node (V-Dem Dataset)
+    items.push({ key: VDEM_DATASET_KEY, type: 'dataset', level: 1, dataset: 'V-Dem Dataset' });
+    const datasetExpanded = expandedDatasets.has(VDEM_DATASET_KEY);
+    if (datasetExpanded) {
+      for (const cat of CATEGORIES) {
+        const catKey = `cat::${cat}`;
+        items.push({ key: catKey, type: 'category', level: 2, cat });
+        if (expandedCategories.has(cat)) {
+          const subs = getSubcategoriesForCategory(cat);
+          for (const sub of subs) {
+            const subKey = `${cat}::${sub}`;
+            const nodeKey = `sub::${subKey}`;
+            items.push({ key: nodeKey, type: 'subcategory', level: 3, cat, sub });
+            if (expandedSubcats.has(subKey)) {
+              const vars = getVariables(cat, sub);
+              for (const v of vars) {
+                const code = getVariableCode(v) ?? v;
+                if (code && HIDDEN_VARIABLE_CODES.has(code)) continue;
+                const varKey = `var::${code}`;
+                items.push({ key: varKey, type: 'variable', level: 4, cat, sub, code });
+              }
             }
           }
         }
       }
     }
+    // IMF Dataset
+    items.push({ key: IMF_DATASET_KEY, type: 'dataset', level: 1, dataset: 'IMF Dataset' });
+    const imfExpanded = expandedDatasets.has(IMF_DATASET_KEY);
+    if (imfExpanded) {
+      const imfCategories: { catKey: string; label: string; entries: [string, string][] }[] = [
+        { catKey: 'imf-nea', label: 'National Economic Accounts (NEA)', entries: Object.entries(IMF_NEA_CODE_TO_DESC) },
+        { catKey: 'imf-weo', label: 'World Economic Outlook (WEO)', entries: Object.entries(IMF_WEO_CODE_TO_DESC) }
+      ];
+      for (const cat of imfCategories) {
+        const catKeyFull = `imfcat::${cat.catKey}`;
+        items.push({ key: catKeyFull, type: 'imfCategory', level: 2, dataset: 'IMF Dataset', catKey: cat.catKey, label: cat.label });
+        if (expandedImfCategories.has(cat.catKey)) {
+          for (const [code, desc] of cat.entries) {
+            items.push({ key: `imfvar::${code}`, type: 'imfVariable', level: 3, dataset: 'IMF Dataset', catKey: cat.catKey, code, label: desc });
+          }
+        }
+      }
+    }
     return items;
-  }, [expandedCategories, expandedSubcats]);
+  }, [expandedCategories, expandedSubcats, expandedDatasets, expandedImfCategories]);
 
   const getIndexByKey = (key: string) => visibleItems.findIndex(i => i.key === key);
   const moveFocusToIndex = (idx: number) => {
@@ -225,7 +257,21 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
       return;
     }
     if (key === 'ArrowRight') {
-      if (current.type === 'category') {
+      if (current.type === 'dataset') {
+        if (!expandedDatasets.has(current.key)) {
+          const next = new Set(expandedDatasets); next.add(current.key); setExpandedDatasets(next);
+        } else {
+          const nextItem = visibleItems[idx + 1];
+          if (nextItem && nextItem.level > current.level) moveFocusToIndex(idx + 1);
+        }
+      } else if (current.type === 'imfCategory') {
+        if (!expandedImfCategories.has(current.catKey)) {
+          const next = new Set(expandedImfCategories); next.add(current.catKey); setExpandedImfCategories(next);
+        } else {
+          const nextItem = visibleItems[idx + 1];
+          if (nextItem && nextItem.level > current.level) moveFocusToIndex(idx + 1);
+        }
+      } else if (current.type === 'category') {
         if (!expandedCategories.has(current.cat)) {
           expandCategory(current.cat);
         } else {
@@ -244,11 +290,23 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
       return;
     }
     if (key === 'ArrowLeft') {
-      if (current.type === 'category') {
+      if (current.type === 'dataset') {
+        if (expandedDatasets.has(current.key)) {
+          const next = new Set(expandedDatasets); next.delete(current.key); setExpandedDatasets(next);
+        } else {
+          moveFocusToKey('all');
+        }
+      } else if (current.type === 'imfCategory') {
+        if (expandedImfCategories.has(current.catKey)) {
+          const next = new Set(expandedImfCategories); next.delete(current.catKey); setExpandedImfCategories(next);
+        } else {
+          moveFocusToKey(IMF_DATASET_KEY);
+        }
+      } else if (current.type === 'category') {
         if (expandedCategories.has(current.cat)) {
           collapseCategory(current.cat);
         } else {
-          moveFocusToKey('all');
+          moveFocusToKey(VDEM_DATASET_KEY);
         }
       } else if (current.type === 'subcategory') {
         const keyStr = `${current.cat}::${current.sub}`;
@@ -259,12 +317,36 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
         }
       } else if (current.type === 'variable') {
         moveFocusToKey(`sub::${current.cat}::${current.sub}`);
+      } else if (current.type === 'imfVariable') {
+        moveFocusToKey(`imfcat::${current.catKey}`);
       }
       return;
     }
     if (key === 'Enter' || key === ' ' || key === 'Space') {
-      if (current.type === 'variable') {
+      if (current.type === 'dataset') {
+        const next = new Set(expandedDatasets);
+        if (next.has(current.key)) next.delete(current.key); else next.add(current.key);
+        setExpandedDatasets(next);
+      } else if (current.type === 'variable') {
         selectVariable(current.cat, current.sub, current.code);
+      } else if (current.type === 'imfCategory') {
+        const next = new Set(expandedImfCategories);
+        if (next.has(current.catKey)) next.delete(current.catKey); else next.add(current.catKey);
+        setExpandedImfCategories(next);
+      } else if (current.type === 'imfVariable') {
+        // IMF selection: mimic selectVariable but without category/subcategory changes
+        const currentVars = currentQuery.variables ?? [];
+        const code = current.code;
+        const nextVars = currentVars.includes(code)
+          ? currentVars.filter(v => v !== code)
+          : (currentVars.length < 5 ? [...currentVars, code] : currentVars);
+        if (nextVars !== currentVars) {
+          onQueryChange({
+            ...currentQuery,
+            variables: nextVars,
+            variable: nextVars[0]
+          });
+        }
       } else if (current.type === 'category') {
         toggleCategory(current.cat);
       } else if (current.type === 'subcategory') {
@@ -306,6 +388,24 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
 
   // Reveal a measure in the tree (expand and schedule scroll)
   const revealMeasure = (code: string, displayLabel?: string) => {
+    // First check if this is an IMF variable; if so expand IMF dataset + proper category
+    if (IMF_WEO_CODE_TO_DESC[code] || IMF_NEA_CODE_TO_DESC[code]) {
+      // Ensure IMF dataset expanded
+      setExpandedDatasets(prev => {
+        if (prev.has(IMF_DATASET_KEY)) return prev;
+        const next = new Set(prev); next.add(IMF_DATASET_KEY); return next;
+      });
+      // Determine which IMF category contains the code
+      const catKey = IMF_WEO_CODE_TO_DESC[code] ? 'imf-weo' : 'imf-nea';
+      setExpandedImfCategories(prev => {
+        if (prev.has(catKey)) return prev;
+        const next = new Set(prev); next.add(catKey); return next;
+      });
+      // Focus key for IMF variable rows uses prefix imfvar::
+      setFocusedKey(`imfvar::${code}`);
+      setPendingScrollCode(code);
+      return; // Done handling IMF variable
+    }
     const path =
       getMeasurePathByCode(code) ||
       (displayLabel ? getMeasurePathByLabel(displayLabel) : undefined) ||
@@ -343,7 +443,9 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
         (el as HTMLElement).scrollIntoView({ block: 'center', behavior: 'smooth' });
         (el as HTMLElement).classList.add('ring-2', 'ring-primary/50', 'rounded');
         // Focus and set roving focus key
-        setFocusedKey(`var::${code}`);
+  // Decide correct focus key based on whether this is a V-Dem or IMF variable row
+  const focusKey = rowRefs.current[`var::${code}`] ? `var::${code}` : (rowRefs.current[`imfvar::${code}`] ? `imfvar::${code}` : `var::${code}`);
+  setFocusedKey(focusKey);
         (el as HTMLElement).focus?.({ preventScroll: true });
         setTimeout(() => (el as HTMLElement).classList.remove('ring-2', 'ring-primary/50', 'rounded'), 1400);
         // reset
@@ -492,7 +594,25 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
           >
             <span>All Categories</span>
           </button>
-          {CATEGORIES.map((cat) => {
+          {/* Dataset: V-Dem */}
+          <button
+            onClick={() => {
+              const next = new Set(expandedDatasets);
+              if (next.has(VDEM_DATASET_KEY)) next.delete(VDEM_DATASET_KEY); else next.add(VDEM_DATASET_KEY);
+              setExpandedDatasets(next);
+            }}
+            className={`w-full flex items-center gap-2 text-left px-3 py-2 text-sm hover:bg-muted`}
+            ref={(el) => { rowRefs.current[VDEM_DATASET_KEY] = el; }}
+            tabIndex={focusedKey === VDEM_DATASET_KEY ? 0 : -1}
+            role="treeitem"
+            aria-level={1}
+            aria-expanded={expandedDatasets.has(VDEM_DATASET_KEY)}
+            onFocus={() => setFocusedKey(VDEM_DATASET_KEY)}
+          >
+            {expandedDatasets.has(VDEM_DATASET_KEY) ? <MinusSquare className="h-4 w-4" /> : <PlusSquare className="h-4 w-4" />}
+            <span>V-Dem Dataset</span>
+          </button>
+          {expandedDatasets.has(VDEM_DATASET_KEY) && CATEGORIES.map((cat) => {
             const expanded = expandedCategories.has(cat);
             return (
               <div key={cat} className="">
@@ -502,7 +622,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                   ref={(el) => { rowRefs.current[`cat::${cat}`] = el; }}
                   tabIndex={focusedKey === `cat::${cat}` ? 0 : -1}
                   role="treeitem"
-                  aria-level={1}
+                  aria-level={2}
                   aria-expanded={expanded}
                   onFocus={() => setFocusedKey(`cat::${cat}`)}
                 >
@@ -526,7 +646,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                             ref={(el) => { rowRefs.current[`sub::${subKey}`] = el; }}
                             tabIndex={focusedKey === `sub::${subKey}` ? 0 : -1}
                             role="treeitem"
-                            aria-level={2}
+                            aria-level={3}
                             aria-expanded={subExpanded}
                             onFocus={() => setFocusedKey(`sub::${subKey}`)}
                           >
@@ -549,7 +669,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                                     className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted rounded"
                                     tabIndex={focusedKey === `var::${code}` ? 0 : -1}
                                     role="treeitem"
-                                    aria-level={3}
+                                    aria-level={4}
                                     onFocus={() => setFocusedKey(`var::${code}`)}
                                   >
                                     <Checkbox
@@ -571,6 +691,92 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
               </div>
             );
           })}
+          {/* Dataset: IMF */}
+          <button
+            onClick={() => {
+              const next = new Set(expandedDatasets);
+              if (next.has(IMF_DATASET_KEY)) next.delete(IMF_DATASET_KEY); else next.add(IMF_DATASET_KEY);
+              setExpandedDatasets(next);
+            }}
+            className={`w-full flex items-center gap-2 text-left px-3 py-2 text-sm hover:bg-muted`}
+            ref={(el) => { rowRefs.current[IMF_DATASET_KEY] = el; }}
+            tabIndex={focusedKey === IMF_DATASET_KEY ? 0 : -1}
+            role="treeitem"
+            aria-level={1}
+            aria-expanded={expandedDatasets.has(IMF_DATASET_KEY)}
+            onFocus={() => setFocusedKey(IMF_DATASET_KEY)}
+          >
+            {expandedDatasets.has(IMF_DATASET_KEY) ? <MinusSquare className="h-4 w-4" /> : <PlusSquare className="h-4 w-4" />}
+            <span>IMF Dataset</span>
+          </button>
+          {expandedDatasets.has(IMF_DATASET_KEY) && (
+            <div className="border-t border-border">
+              {[
+                { catKey: 'imf-nea', label: 'National Economic Accounts (NEA)', entries: Object.entries(IMF_NEA_CODE_TO_DESC) },
+                { catKey: 'imf-weo', label: 'World Economic Outlook (WEO)', entries: Object.entries(IMF_WEO_CODE_TO_DESC) }
+              ].map(cat => {
+                const expanded = expandedImfCategories.has(cat.catKey);
+                const catRowKey = `imfcat::${cat.catKey}`;
+                return (
+                  <div key={cat.catKey}>
+                    <button
+                      onClick={() => {
+                        const next = new Set(expandedImfCategories);
+                        if (next.has(cat.catKey)) next.delete(cat.catKey); else next.add(cat.catKey);
+                        setExpandedImfCategories(next);
+                      }}
+                      className={`w-full flex items-center gap-2 text-left px-3 py-2 text-sm hover:bg-muted`}
+                      ref={(el) => { rowRefs.current[catRowKey] = el; }}
+                      tabIndex={focusedKey === catRowKey ? 0 : -1}
+                      role="treeitem"
+                      aria-level={2}
+                      aria-expanded={expanded}
+                      onFocus={() => setFocusedKey(catRowKey)}
+                    >
+                      {expanded ? <MinusSquare className="h-4 w-4" /> : <PlusSquare className="h-4 w-4" />}
+                      <span>{cat.label}</span>
+                    </button>
+                    {expanded && (
+                      <div className="pl-4 py-1">
+                        {cat.entries.map(([code, desc]) => {
+                          const isActive = (currentQuery.variables ?? (currentQuery.variable ? [currentQuery.variable] : [])).includes(code);
+                          const inputId = `imf-${cat.catKey}-${code}`;
+                          return (
+                            <label
+                              key={code}
+                              id={`measure-${code}`}
+                              ref={(node) => { measureRefs.current[code] = node; rowRefs.current[`imfvar::${code}`] = node; }}
+                              htmlFor={inputId}
+                              className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted rounded"
+                              tabIndex={focusedKey === `imfvar::${code}` ? 0 : -1}
+                              role="treeitem"
+                              aria-level={3}
+                              onFocus={() => setFocusedKey(`imfvar::${code}`)}
+                            >
+                              <Checkbox
+                                id={inputId}
+                                checked={isActive}
+                                onCheckedChange={() => {
+                                  const currentVars = currentQuery.variables ?? [];
+                                  const nextVars = currentVars.includes(code)
+                                    ? currentVars.filter(v => v !== code)
+                                    : (currentVars.length < 5 ? [...currentVars, code] : currentVars);
+                                  if (nextVars !== currentVars) {
+                                    onQueryChange({ ...currentQuery, variables: nextVars, variable: nextVars[0] });
+                                  }
+                                }}
+                              />
+                              <span>{desc}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

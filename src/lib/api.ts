@@ -32,7 +32,7 @@ export class VDemApiService {
 
   async query(request: ApiQueryRequest): Promise<ApiDataPoint[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/query`, {
+  const response = await fetch(`${API_BASE_URL}/v-dem/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -56,6 +56,34 @@ export class VDemApiService {
       });
     } catch (error) {
       console.error('API query failed:', error);
+      throw error;
+    }
+  }
+
+  async queryImf(request: ApiQueryRequest, opts?: { isNea?: boolean }): Promise<ApiDataPoint[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/imf/query`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(opts?.isNea ? { ...request, isNea: true } : request),
+      });
+
+      if (!response.ok) {
+        throw new Error(`IMF API request failed: ${response.status} ${response.statusText}`);
+      }
+
+      const data = (await response.json()) as unknown[];
+      return (data as ApiDataPoint[]).map((item: ApiDataPoint) => {
+        const yearValue = (item as unknown as { year: number | bigint }).year;
+        return {
+          ...item,
+          year: typeof yearValue === 'bigint' ? Number(yearValue) : yearValue,
+        } as ApiDataPoint;
+      });
+    } catch (error) {
+      console.error('IMF API query failed:', error);
       throw error;
     }
   }

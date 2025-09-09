@@ -1,4 +1,5 @@
 import { getVariableName } from '@/lib/variable-codes';
+import { IMF_WEO_CODE_TO_DESC, IMF_NEA_CODE_TO_DESC } from '@/lib/imf-codes';
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -188,7 +189,12 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
               {/* Render a separate chart for each selected variable */}
               {selectedVars.map((v) => {
                 const variableMeta = getVariableById(v);
-                const variableLabel = variableMeta?.label ?? getVariableName(v) ?? v;
+                const variableLabel =
+                  variableMeta?.label ||
+                  getVariableName(v) ||
+                  IMF_WEO_CODE_TO_DESC[v] ||
+                  IMF_NEA_CODE_TO_DESC[v] ||
+                  v;
                 const variableScale = variableMeta?.scale ?? '';
                 const variableUnit = variableMeta?.unit;
                 const rows = chartDataByVar[v] || [];
