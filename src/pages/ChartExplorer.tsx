@@ -155,6 +155,137 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
     });
   };
 
+  // Helper: decide dataset for a variable code
+  const isImfVar = (v: string) => {
+    return (
+      !!IMF_WEO_CODE_TO_DESC[v] ||
+      !!IMF_NEA_CODE_TO_DESC[v] ||
+      (/[A-Z]/.test(v) && /\./.test(v) && !/^v\d|^e_/i.test(v))
+    );
+  };
+  const isVdemVar = (v: string) => {
+    // Prefer explicit IMF classification; otherwise use presence in V-Dem meta as hint
+    if (isImfVar(v)) return false;
+    return !!getVariableById(v);
+  };
+  const vdemVars = selectedVars.filter(isVdemVar);
+  const imfVars = selectedVars.filter(isImfVar);
+  const otherVars = selectedVars.filter(v => !vdemVars.includes(v) && !imfVars.includes(v));
+  // Put any uncategorized variables into V-Dem section by default to preserve visibility
+  const vdemAll = [...vdemVars, ...otherVars];
+
+  // Renderer for a single chart card (kept identical to previous rendering for behavior parity)
+  const renderChartCard = (v: string) => {
+    const variableMeta = getVariableById(v);
+    const variableLabel =
+      variableMeta?.label ||
+      getVariableName(v) ||
+      IMF_WEO_CODE_TO_DESC[v] ||
+      IMF_NEA_CODE_TO_DESC[v] ||
+      v;
+    const variableScale = variableMeta?.scale ?? '';
+    const variableUnit = variableMeta?.unit;
+    const rows = chartDataByVar[v] || [];
+    return (
+      <div key={v} className="bg-card border border-border rounded-xl p-4 sm:p-6 mx-auto w-full max-w-[1600px]">
+        <div className="mb-3">
+          <h2 className="text-lg font-semibold">{variableLabel}</h2>
+          {variableScale && (
+            <p className="text-muted-foreground text-sm">{variableScale}</p>
+          )}
+        </div>
+        {rows.length > 0 ? (
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart data={rows}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis 
+                dataKey="year" 
+                stroke="hsl(var(--muted-foreground))"
+              />
+              <YAxis 
+                stroke="hsl(var(--muted-foreground))"
+                tickFormatter={(value) => {
+                  if (value === null) return 'N/A';
+                  if (variableUnit === '%') return `${(value as number).toFixed(1)}%`;
+                  if ((variableScale || '').includes('0-1')) return (value as number).toFixed(3);
+                  return (value as number).toFixed(2);
+                }}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'hsl(var(--card))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '8px'
+                }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload || !payload.length) return null;
+                  // Sort payload according to currentQuery.countries order
+                  const sortedPayload = payload.sort((a, b) => {
+                    const aIndex = currentQuery.countries.indexOf(a.dataKey as string);
+                    const bIndex = currentQuery.countries.indexOf(b.dataKey as string);
+                    return aIndex - bIndex;
+                  });
+                  return (
+                    <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
+                      <p className="font-medium mb-2">{`${variableLabel} — Year: ${label}`}</p>
+                      {sortedPayload.map((entry, index) => {
+                        const country = getCountryById(entry.dataKey as string);
+                        return (
+                          <div key={index} className="flex items-center gap-2">
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: entry.color }}
+                            />
+                            <span className="text-sm">
+                              {country?.name}: {entry.value === null ? 'N/A' : (variableUnit === '%') ? `${(entry.value as number).toFixed(1)}%` : (variableScale || '').includes('0-1') ? (entry.value as number).toFixed(3) : (entry.value as number).toFixed(2)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                }}
+              />
+              <Legend />
+              {currentQuery.countries.map((countryId, index) => {
+                const country = getCountryById(countryId);
+                return (
+                  <Line
+                    key={countryId}
+                    type="monotone"
+                    dataKey={countryId}
+                    stroke={getCountryColor(index)}
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                    name={country?.name}
+                    connectNulls={false}
+                  />
+                );
+              })}
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-48 flex items-center justify-center border border-border rounded-xl">
+            <div className="text-center">
+              <p className="text-muted-foreground">No data available for the selected criteria</p>
+            </div>
+          </div>
+        )}
+        {/* Actions for each variable */}
+        <div className="flex items-center gap-3 pt-4 border-t border-border mt-4">
+          <Button variant="outline" size="sm" onClick={() => handleDownloadCSVFor(v, rows)}>
+            <Download className="h-4 w-4 mr-2" />
+            Download CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleShareLink}>
+            <Link2 className="h-4 w-4 mr-2" />
+            Copy Share Link
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="grid grid-cols-1 sm:grid-cols-[13fr_1fr_6fr] gap-0 p-4 h-[calc(100vh-64px)] overflow-hidden min-h-0">
@@ -185,118 +316,30 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
               <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* Render a separate chart for each selected variable */}
-              {selectedVars.map((v) => {
-                const variableMeta = getVariableById(v);
-                const variableLabel =
-                  variableMeta?.label ||
-                  getVariableName(v) ||
-                  IMF_WEO_CODE_TO_DESC[v] ||
-                  IMF_NEA_CODE_TO_DESC[v] ||
-                  v;
-                const variableScale = variableMeta?.scale ?? '';
-                const variableUnit = variableMeta?.unit;
-                const rows = chartDataByVar[v] || [];
-                return (
-                  <div key={v} className="bg-card border border-border rounded-xl p-4 sm:p-6 mx-auto w-full max-w-[1600px]">
-                    <div className="mb-3">
-                      <h2 className="text-lg font-semibold">{variableLabel}</h2>
-                      {variableScale && (
-                        <p className="text-muted-foreground text-sm">{variableScale}</p>
-                      )}
-                    </div>
-                    {rows.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={400}>
-                        <LineChart data={rows}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                          <XAxis 
-                            dataKey="year" 
-                            stroke="hsl(var(--muted-foreground))"
-                          />
-                          <YAxis 
-                            stroke="hsl(var(--muted-foreground))"
-                            tickFormatter={(value) => {
-                              if (value === null) return 'N/A';
-                              if (variableUnit === '%') return `${(value as number).toFixed(1)}%`;
-                              if (variableScale.includes('0-1')) return (value as number).toFixed(3);
-                              return (value as number).toFixed(2);
-                            }}
-                          />
-                          <Tooltip 
-                            contentStyle={{ 
-                              backgroundColor: 'hsl(var(--card))',
-                              border: '1px solid hsl(var(--border))',
-                              borderRadius: '8px'
-                            }}
-                            content={({ active, payload, label }) => {
-                              if (!active || !payload || !payload.length) return null;
-                              // Sort payload according to currentQuery.countries order
-                              const sortedPayload = payload.sort((a, b) => {
-                                const aIndex = currentQuery.countries.indexOf(a.dataKey as string);
-                                const bIndex = currentQuery.countries.indexOf(b.dataKey as string);
-                                return aIndex - bIndex;
-                              });
-                              return (
-                                <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
-                                  <p className="font-medium mb-2">{`${variableLabel} — Year: ${label}`}</p>
-                                  {sortedPayload.map((entry, index) => {
-                                    const country = getCountryById(entry.dataKey as string);
-                                    return (
-                                      <div key={index} className="flex items-center gap-2">
-                                        <div 
-                                          className="w-3 h-3 rounded-full" 
-                                          style={{ backgroundColor: entry.color }}
-                                        />
-                                        <span className="text-sm">
-                                          {country?.name}: {entry.value === null ? 'N/A' : (variableUnit === '%') ? `${(entry.value as number).toFixed(1)}%` : variableScale.includes('0-1') ? (entry.value as number).toFixed(3) : (entry.value as number).toFixed(2)}
-                                        </span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              );
-                            }}
-                          />
-                          <Legend />
-                          {currentQuery.countries.map((countryId, index) => {
-                            const country = getCountryById(countryId);
-                            return (
-                              <Line
-                                key={countryId}
-                                type="monotone"
-                                dataKey={countryId}
-                                stroke={getCountryColor(index)}
-                                strokeWidth={2}
-                                dot={{ r: 4 }}
-                                name={country?.name}
-                                connectNulls={false}
-                              />
-                            );
-                          })}
-                        </LineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-48 flex items-center justify-center border border-border rounded-xl">
-                        <div className="text-center">
-                          <p className="text-muted-foreground">No data available for the selected criteria</p>
-                        </div>
-                      </div>
-                    )}
-                    {/* Actions for each variable */}
-                    <div className="flex items-center gap-3 pt-4 border-t border-border mt-4">
-                      <Button variant="outline" size="sm" onClick={() => handleDownloadCSVFor(v, rows)}>
-                        <Download className="h-4 w-4 mr-2" />
-                        Download CSV
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={handleShareLink}>
-                        <Link2 className="h-4 w-4 mr-2" />
-                        Copy Share Link
-                      </Button>
-                    </div>
+            <div className="space-y-10">
+              {/* V-Dem charts section */}
+              {vdemAll.length > 0 && (
+                <section>
+                  <div className="mb-4">
+                    <h2 className="text-2xl font-bold">V-Dem Dataset</h2>
                   </div>
-                );
-              })}
+                  <div className="space-y-6">
+                    {vdemAll.map((v) => renderChartCard(v))}
+                  </div>
+                </section>
+              )}
+
+              {/* IMF charts section */}
+              {imfVars.length > 0 && (
+                <section>
+                  <div className="mb-4">
+                    <h2 className="text-2xl font-bold">IMF Dataset</h2>
+                  </div>
+                  <div className="space-y-6">
+                    {imfVars.map((v) => renderChartCard(v))}
+                  </div>
+                </section>
+              )}
             </div>
           )}
 
