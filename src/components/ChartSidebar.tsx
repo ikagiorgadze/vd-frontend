@@ -617,7 +617,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                   <div key={cat}>
                     <button
                       onClick={() => toggleCategory(cat)}
-                      className="w-full flex items-center gap-2 text-left px-3 py-2 text-sm hover:bg-muted"
+                      className="w-full flex items-center gap-2 text-left pr-3 pl-6 py-2 text-sm hover:bg-muted"
                       ref={(el) => { rowRefs.current[`cat::${cat}`] = el; }}
                       tabIndex={focusedKey === `cat::${cat}` ? 0 : -1}
                       role="treeitem"
@@ -641,7 +641,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                                   changeCategory(cat);
                                   changeSubcategory(sub);
                                 }}
-                                className="w-full flex items-center gap-2 text-left px-3 py-2 text-sm hover:bg-muted"
+                                className="w-full flex items-center gap-2 text-left pr-3 pl-10 py-2 text-sm hover:bg-muted"
                                 ref={(el) => { rowRefs.current[`sub::${subKey}`] = el; }}
                                 tabIndex={focusedKey === `sub::${subKey}` ? 0 : -1}
                                 role="treeitem"
@@ -665,7 +665,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                                         ref={(node) => { measureRefs.current[code] = node; rowRefs.current[`var::${code}`] = node; }}
                                         key={`${subKey}::${v}`}
                                         htmlFor={inputId}
-                                        className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted rounded"
+                                        className="flex items-center gap-2 pr-3 pl-14 py-1.5 text-sm cursor-pointer hover:bg-muted rounded"
                                         tabIndex={focusedKey === `var::${code}` ? 0 : -1}
                                         role="treeitem"
                                         aria-level={4}
@@ -728,7 +728,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                         if (next.has(cat.catKey)) next.delete(cat.catKey); else next.add(cat.catKey);
                         setExpandedImfCategories(next);
                       }}
-                      className="w-full flex items-center gap-2 text-left px-3 py-2 text-sm hover:bg-muted"
+                      className="w-full flex items-center gap-2 text-left pr-3 pl-6 py-2 text-sm hover:bg-muted"
                       ref={(el) => { rowRefs.current[catRowKey] = el; }}
                       tabIndex={focusedKey === catRowKey ? 0 : -1}
                       role="treeitem"
@@ -750,7 +750,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                               id={`measure-${code}`}
                               ref={(node) => { measureRefs.current[code] = node; rowRefs.current[`imfvar::${code}`] = node; }}
                               htmlFor={inputId}
-                              className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted rounded"
+                              className="flex items-center gap-2 pr-3 pl-10 py-1.5 text-sm cursor-pointer hover:bg-muted rounded"
                               tabIndex={focusedKey === `imfvar::${code}` ? 0 : -1}
                               role="treeitem"
                               aria-level={3}
