@@ -6,6 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useSearchParams, useNavigate } from "react-router-dom";
 import { GlobalHeader } from "@/components/GlobalHeader";
 import { Dashboard } from "@/pages/Dashboard";
+import VDemDatasetInfo from "@/pages/VDemDatasetInfo";
+import IMFDatasetInfo from "@/pages/IMFDatasetInfo";
 import { ChartExplorer } from "@/pages/ChartExplorer";
 import NotFound from "./pages/NotFound";
 import { QueryState, DEFAULT_STATE, urlParamsToState, stateToUrlParams } from "@/lib/url-state";
@@ -63,6 +65,8 @@ function AppContent() {
             />
           } 
         />
+  <Route path="/info/v-dem" element={<VDemDatasetInfo />} />
+  <Route path="/info/imf" element={<IMFDatasetInfo />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </div>

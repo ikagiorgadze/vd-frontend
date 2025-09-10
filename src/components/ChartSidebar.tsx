@@ -27,7 +27,8 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
   // Dataset grouping: currently only V-Dem Dataset. Keep structure to add more later (e.g., IMF Dataset)
   const VDEM_DATASET_KEY = 'dataset::vdem';
   const IMF_DATASET_KEY = 'dataset::imf';
-  const [expandedDatasets, setExpandedDatasets] = useState<Set<string>>(new Set([VDEM_DATASET_KEY]));
+  // Start with all datasets collapsed when entering the page
+  const [expandedDatasets, setExpandedDatasets] = useState<Set<string>>(new Set());
   const [expandedImfCategories, setExpandedImfCategories] = useState<Set<string>>(new Set());
   const [expandedSubcats, setExpandedSubcats] = useState<Set<string>>(new Set());
   const [pendingScrollCode, setPendingScrollCode] = useState<string | null>(null);

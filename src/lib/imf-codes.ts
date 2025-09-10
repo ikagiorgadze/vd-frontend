@@ -152,7 +152,7 @@ export const IMF_WEO_CODE_TO_DESC: Record<string, string> = {
 };
 
 export const IMF_NEA_CODE_TO_DESC: Record<string, string> = {
-  "B11.Q.USD": "External balance of goods and services",
+  "B11.Q.USD.A": "External balance of goods and services",
   "B11.Q.XDC.A": "External balance of goods and services",
   "B11.V.USD.A": "External balance of goods and services",
   "B11.V.XDC.A": "External balance of goods and services",

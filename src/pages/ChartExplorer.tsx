@@ -3,7 +3,7 @@ import { IMF_WEO_CODE_TO_DESC, IMF_NEA_CODE_TO_DESC } from '@/lib/imf-codes';
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Download, Link2, Filter, X } from 'lucide-react';
+import { Download, Link2, Filter, X, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ChartSidebar from '@/components/ChartSidebar';
 import { fetchVDemData, VDemDataPoint } from '@/lib/data';
@@ -320,8 +320,11 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
               {/* V-Dem charts section */}
               {vdemAll.length > 0 && (
                 <section>
-                  <div className="mb-4">
+                  <div className="mb-4 flex items-center gap-2">
                     <h2 className="text-2xl font-bold">V-Dem Dataset</h2>
+                    <a href="/info/v-dem" className="text-muted-foreground hover:text-foreground" title="See information about this dataset">
+                      <HelpCircle className="h-5 w-5" />
+                    </a>
                   </div>
                   <div className="space-y-6">
                     {vdemAll.map((v) => renderChartCard(v))}
@@ -332,8 +335,11 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
               {/* IMF charts section */}
               {imfVars.length > 0 && (
                 <section>
-                  <div className="mb-4">
+                  <div className="mb-4 flex items-center gap-2">
                     <h2 className="text-2xl font-bold">IMF Dataset</h2>
+                    <a href="/info/imf" className="text-muted-foreground hover:text-foreground" title="See information about this dataset">
+                      <HelpCircle className="h-5 w-5" />
+                    </a>
                   </div>
                   <div className="space-y-6">
                     {imfVars.map((v) => renderChartCard(v))}
