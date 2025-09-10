@@ -34,7 +34,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
   const scrollRetry = useRef(0);
   const measureRefs = useRef<Record<string, HTMLElement | null>>({});
   // Roving focus for keyboard navigation in the measures tree
-  const [focusedKey, setFocusedKey] = useState<string>('all');
+  const [focusedKey, setFocusedKey] = useState<string>(VDEM_DATASET_KEY);
   const rowRefs = useRef<Record<string, HTMLElement | null>>({});
   // Local input state for years to avoid clamping on every keystroke
   const [fromYearInput, setFromYearInput] = useState<string>(String(currentQuery.startYear));
@@ -153,7 +153,6 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
   };
 
   type VisibleItem =
-    | { key: string; type: 'all'; level: 1 }
     | { key: string; type: 'dataset'; level: 1; dataset: string }
     | { key: string; type: 'category'; level: 2; cat: VDemCategory }
     | { key: string; type: 'subcategory'; level: 3; cat: VDemCategory; sub: string }
@@ -162,8 +161,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
     | { key: string; type: 'imfVariable'; level: 3; dataset: 'IMF Dataset'; catKey: string; code: string; label: string };
 
   const visibleItems: VisibleItem[] = useMemo(() => {
-    const items: VisibleItem[] = [];
-    items.push({ key: 'all', type: 'all', level: 1 });
+  const items: VisibleItem[] = [];
     // Dataset node (V-Dem Dataset)
     items.push({ key: VDEM_DATASET_KEY, type: 'dataset', level: 1, dataset: 'V-Dem Dataset' });
     const datasetExpanded = expandedDatasets.has(VDEM_DATASET_KEY);
@@ -236,7 +234,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
   // Keep focusedKey valid as tree changes
   useEffect(() => {
     if (!visibleItems.some(i => i.key === focusedKey)) {
-      setFocusedKey('all');
+      setFocusedKey(VDEM_DATASET_KEY);
     }
   }, [visibleItems, focusedKey]);
 
@@ -290,11 +288,12 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
       return;
     }
     if (key === 'ArrowLeft') {
-      if (current.type === 'dataset') {
+    if (current.type === 'dataset') {
         if (expandedDatasets.has(current.key)) {
           const next = new Set(expandedDatasets); next.delete(current.key); setExpandedDatasets(next);
         } else {
-          moveFocusToKey('all');
+      // Move focus to the first item in the list (V-Dem dataset header)
+      moveFocusToIndex(0);
         }
       } else if (current.type === 'imfCategory') {
         if (expandedImfCategories.has(current.catKey)) {
@@ -476,8 +475,13 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
     requestAnimationFrame(tryScroll);
   }, [pendingScrollCode]);
 
+  // Selected measures helper for chips and active checks
+  const selectedMeasures: string[] = useMemo(() => (
+    currentQuery.variables ?? (currentQuery.variable ? [currentQuery.variable] : [])
+  ), [currentQuery.variables, currentQuery.variable]);
+
   return (
-  <div className="h-full bg-card border-l border-border p-4">
+    <div className="h-full bg-card p-4" id="sidebar-scroll-container">
       {/* Selected countries as removable buttons */}
       {currentQuery.countries.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
@@ -486,17 +490,19 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
             return (
               <button
                 key={id}
-                className="flex items-center gap-1 px-2 py-1 bg-muted rounded text-xs hover:bg-primary/10 border border-border"
+                type="button"
                 onClick={() => removeCountry(id)}
                 title={`Remove ${c?.name || id}`}
+                className="inline-flex items-center gap-2 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
               >
                 <span>{c?.name || id}</span>
-                <X className="w-3 h-3" />
+                <X className="h-3 w-3" />
               </button>
             );
           })}
         </div>
       )}
+
       {/* Countries */}
       <div className="space-y-2 mb-4">
         <Label className="text-xs">Countries</Label>
@@ -520,20 +526,22 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
           ))}
         </div>
       </div>
+
       {/* Time Period */}
       <div className="space-y-2 mb-4">
         <Label className="text-xs">Time Period</Label>
         <div className="grid grid-cols-2 gap-2">
-      <div>
+          <div>
             <Label htmlFor="from" className="text-xs">From</Label>
             <Input
               id="from"
               type="number"
               min={1800}
               max={new Date().getFullYear()}
-        value={fromYearInput}
-        onChange={(e) => setFromYearInput(e.target.value)}
-        onBlur={(e) => commitYear('startYear', e.target.value)}
+              value={fromYearInput}
+              onChange={(e) => setFromYearInput(e.target.value)}
+              onBlur={() => commitYear('startYear', fromYearInput)}
+              onKeyDown={(e) => { if (e.key === 'Enter') commitYear('startYear', fromYearInput); }}
             />
           </div>
           <div>
@@ -543,57 +551,45 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
               type="number"
               min={1800}
               max={new Date().getFullYear()}
-        value={toYearInput}
-        onChange={(e) => setToYearInput(e.target.value)}
-        onBlur={(e) => commitYear('endYear', e.target.value)}
+              value={toYearInput}
+              onChange={(e) => setToYearInput(e.target.value)}
+              onBlur={() => commitYear('endYear', toYearInput)}
+              onKeyDown={(e) => { if (e.key === 'Enter') commitYear('endYear', toYearInput); }}
             />
           </div>
         </div>
       </div>
 
-  {/* Measures: selected pills and tree */}
-  <div className="space-y-2">
+      {/* Measures: selected pills and tree */}
+      <div className="space-y-2">
         <Label className="text-xs">Measures</Label>
         {/* Selected measures as removable buttons */}
-        {(currentQuery.variables && currentQuery.variables.length > 0) && (
+        {selectedMeasures.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {currentQuery.variables.slice(0, 5).map(code => {
-              const meta = getVariableById(code);
-              const label = meta?.label ?? getVariableName(code) ?? code;
+            {selectedMeasures.map((code) => {
+              const label = getVariableName(code) ?? IMF_WEO_CODE_TO_DESC[code] ?? IMF_NEA_CODE_TO_DESC[code] ?? code;
               return (
                 <button
                   key={code}
-                  className="flex items-center gap-1 px-2 py-1 bg-muted rounded text-xs hover:bg-primary/10 border border-border"
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
                   onClick={() => revealMeasure(code, label)}
-                  title={`Go to ${label}`}
+                  title={label}
                 >
                   <span>{label}</span>
-                  <X
-                    className="w-3 h-3"
-                    onClick={(e) => { e.stopPropagation(); removeMeasure(code); }}
-                  />
+                  <X className="h-3 w-3" onClick={(e) => { e.stopPropagation(); removeMeasure(code); }} />
                 </button>
               );
             })}
           </div>
         )}
+
         <div
-          className="rounded-md border border-border divide-y"
+          className="rounded-md border border-border p-1"
           role="tree"
           aria-label="Measures"
           onKeyDownCapture={handleTreeKeyDown}
         >
-          <button
-            onClick={() => changeCategory('all')}
-            className={`w-full text-left px-3 py-2 text-sm transition-colors hover:bg-muted`}
-            ref={(el) => { rowRefs.current['all'] = el; }}
-            tabIndex={focusedKey === 'all' ? 0 : -1}
-            role="treeitem"
-            aria-level={1}
-            onFocus={() => setFocusedKey('all')}
-          >
-            <span>All Categories</span>
-          </button>
           {/* Dataset: V-Dem */}
           <button
             onClick={() => {
@@ -601,7 +597,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
               if (next.has(VDEM_DATASET_KEY)) next.delete(VDEM_DATASET_KEY); else next.add(VDEM_DATASET_KEY);
               setExpandedDatasets(next);
             }}
-            className={`w-full flex items-center gap-2 text-left px-3 py-2 text-sm hover:bg-muted`}
+            className="w-full flex items-center gap-2 text-left px-3 py-2 text-base font-semibold hover:bg-muted rounded mt-2"
             ref={(el) => { rowRefs.current[VDEM_DATASET_KEY] = el; }}
             tabIndex={focusedKey === VDEM_DATASET_KEY ? 0 : -1}
             role="treeitem"
@@ -612,85 +608,91 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
             {expandedDatasets.has(VDEM_DATASET_KEY) ? <MinusSquare className="h-4 w-4" /> : <PlusSquare className="h-4 w-4" />}
             <span>V-Dem Dataset</span>
           </button>
-          {expandedDatasets.has(VDEM_DATASET_KEY) && CATEGORIES.map((cat) => {
-            const expanded = expandedCategories.has(cat);
-            return (
-              <div key={cat} className="">
-                <button
-                  onClick={() => toggleCategory(cat)}
-                  className={`w-full flex items-center gap-2 text-left px-3 py-2 text-sm hover:bg-muted`}
-                  ref={(el) => { rowRefs.current[`cat::${cat}`] = el; }}
-                  tabIndex={focusedKey === `cat::${cat}` ? 0 : -1}
-                  role="treeitem"
-                  aria-level={2}
-                  aria-expanded={expanded}
-                  onFocus={() => setFocusedKey(`cat::${cat}`)}
-                >
-                  {expanded ? <MinusSquare className="h-4 w-4" /> : <PlusSquare className="h-4 w-4" />}
-                  <span>{cat}</span>
-                </button>
-                {expanded && (
-                  <div className="pl-4 border-t border-border">
-                    {getSubcategoriesForCategory(cat).map((sub) => {
-                      const subKey = `${cat}::${sub}`;
-                      const subExpanded = expandedSubcats.has(subKey);
-                      return (
-                        <div key={subKey}>
-                          <button
-                            onClick={() => {
-                              toggleSubcat(cat, sub);
-                              changeCategory(cat);
-                              changeSubcategory(sub);
-                            }}
-                            className={`w-full flex items-center gap-2 text-left px-3 py-2 text-sm hover:bg-muted`}
-                            ref={(el) => { rowRefs.current[`sub::${subKey}`] = el; }}
-                            tabIndex={focusedKey === `sub::${subKey}` ? 0 : -1}
-                            role="treeitem"
-                            aria-level={3}
-                            aria-expanded={subExpanded}
-                            onFocus={() => setFocusedKey(`sub::${subKey}`)}
-                          >
-                            {subExpanded ? <MinusSquare className="h-4 w-4" /> : <PlusSquare className="h-4 w-4" />}
-                            <span>{sub}</span>
-                          </button>
-                          {subExpanded && (
-                            <div className="pl-6 py-1">
-                              {getVariables(cat, sub).map((v) => {
-                                const code = getVariableCode(v) ?? v;
-                                if (code && HIDDEN_VARIABLE_CODES.has(code)) return null;
-                                const isActive = (currentQuery.variables ?? (currentQuery.variable ? [currentQuery.variable] : [])).includes(code);
-                                const inputId = `var-${cat}-${sub}-${code}`.replace(/\s+/g, '_');
-                                return (
-                                  <label
-                                    id={`measure-${code}`}
-                                    ref={(node) => { measureRefs.current[code] = node; rowRefs.current[`var::${code}`] = node; }}
-                                    key={`${subKey}::${v}`}
-                                    htmlFor={inputId}
-                                    className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted rounded"
-                                    tabIndex={focusedKey === `var::${code}` ? 0 : -1}
-                                    role="treeitem"
-                                    aria-level={4}
-                                    onFocus={() => setFocusedKey(`var::${code}`)}
-                                  >
-                                    <Checkbox
-                                      id={inputId}
-                                      checked={isActive}
-                                      onCheckedChange={() => selectVariable(cat, sub, v)}
-                                    />
-                                    <span>{v}</span>
-                                  </label>
-                                );
-                              })}
+
+          {expandedDatasets.has(VDEM_DATASET_KEY) && (
+            <div className="py-1">
+              {CATEGORIES.map((cat) => {
+                const expanded = expandedCategories.has(cat);
+                return (
+                  <div key={cat}>
+                    <button
+                      onClick={() => toggleCategory(cat)}
+                      className="w-full flex items-center gap-2 text-left px-3 py-2 text-sm hover:bg-muted"
+                      ref={(el) => { rowRefs.current[`cat::${cat}`] = el; }}
+                      tabIndex={focusedKey === `cat::${cat}` ? 0 : -1}
+                      role="treeitem"
+                      aria-level={2}
+                      aria-expanded={expanded}
+                      onFocus={() => setFocusedKey(`cat::${cat}`)}
+                    >
+                      {expanded ? <MinusSquare className="h-4 w-4" /> : <PlusSquare className="h-4 w-4" />}
+                      <span>{cat}</span>
+                    </button>
+                    {expanded && (
+                      <div className="py-1">
+                        {getSubcategoriesForCategory(cat).map((sub) => {
+                          const subKey = `${cat}::${sub}`;
+                          const subExpanded = expandedSubcats.has(subKey);
+                          return (
+                            <div key={subKey}>
+                              <button
+                                onClick={() => {
+                                  toggleSubcat(cat, sub);
+                                  changeCategory(cat);
+                                  changeSubcategory(sub);
+                                }}
+                                className="w-full flex items-center gap-2 text-left px-3 py-2 text-sm hover:bg-muted"
+                                ref={(el) => { rowRefs.current[`sub::${subKey}`] = el; }}
+                                tabIndex={focusedKey === `sub::${subKey}` ? 0 : -1}
+                                role="treeitem"
+                                aria-level={3}
+                                aria-expanded={subExpanded}
+                                onFocus={() => setFocusedKey(`sub::${subKey}`)}
+                              >
+                                {subExpanded ? <MinusSquare className="h-4 w-4" /> : <PlusSquare className="h-4 w-4" />}
+                                <span>{sub}</span>
+                              </button>
+                              {subExpanded && (
+                                <div className="py-1">
+                                  {getVariables(cat, sub).map((v) => {
+                                    const code = getVariableCode(v) ?? v;
+                                    if (code && HIDDEN_VARIABLE_CODES.has(code)) return null;
+                                    const isActive = selectedMeasures.includes(code);
+                                    const inputId = `var-${cat}-${sub}-${code}`.replace(/\s+/g, '_');
+                                    return (
+                                      <label
+                                        id={`measure-${code}`}
+                                        ref={(node) => { measureRefs.current[code] = node; rowRefs.current[`var::${code}`] = node; }}
+                                        key={`${subKey}::${v}`}
+                                        htmlFor={inputId}
+                                        className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted rounded"
+                                        tabIndex={focusedKey === `var::${code}` ? 0 : -1}
+                                        role="treeitem"
+                                        aria-level={4}
+                                        onFocus={() => setFocusedKey(`var::${code}`)}
+                                      >
+                                        <Checkbox
+                                          id={inputId}
+                                          checked={isActive}
+                                          onCheckedChange={() => selectVariable(cat, sub, v)}
+                                        />
+                                        <span>{v}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
+
           {/* Dataset: IMF */}
           <button
             onClick={() => {
@@ -698,7 +700,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
               if (next.has(IMF_DATASET_KEY)) next.delete(IMF_DATASET_KEY); else next.add(IMF_DATASET_KEY);
               setExpandedDatasets(next);
             }}
-            className={`w-full flex items-center gap-2 text-left px-3 py-2 text-sm hover:bg-muted`}
+            className="w-full flex items-center gap-2 text-left px-3 py-2 text-base font-semibold hover:bg-muted rounded mt-4"
             ref={(el) => { rowRefs.current[IMF_DATASET_KEY] = el; }}
             tabIndex={focusedKey === IMF_DATASET_KEY ? 0 : -1}
             role="treeitem"
@@ -709,8 +711,9 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
             {expandedDatasets.has(IMF_DATASET_KEY) ? <MinusSquare className="h-4 w-4" /> : <PlusSquare className="h-4 w-4" />}
             <span>IMF Dataset</span>
           </button>
+
           {expandedDatasets.has(IMF_DATASET_KEY) && (
-            <div className="border-t border-border">
+            <div className="py-1">
               {[
                 { catKey: 'imf-nea', label: 'National Economic Accounts (NEA)', entries: Object.entries(IMF_NEA_CODE_TO_DESC) },
                 { catKey: 'imf-weo', label: 'World Economic Outlook (WEO)', entries: Object.entries(IMF_WEO_CODE_TO_DESC) }
@@ -725,7 +728,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                         if (next.has(cat.catKey)) next.delete(cat.catKey); else next.add(cat.catKey);
                         setExpandedImfCategories(next);
                       }}
-                      className={`w-full flex items-center gap-2 text-left px-3 py-2 text-sm hover:bg-muted`}
+                      className="w-full flex items-center gap-2 text-left px-3 py-2 text-sm hover:bg-muted"
                       ref={(el) => { rowRefs.current[catRowKey] = el; }}
                       tabIndex={focusedKey === catRowKey ? 0 : -1}
                       role="treeitem"
@@ -737,9 +740,9 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                       <span>{cat.label}</span>
                     </button>
                     {expanded && (
-                      <div className="pl-4 py-1">
+                      <div className="py-1">
                         {cat.entries.map(([code, desc]) => {
-                          const isActive = (currentQuery.variables ?? (currentQuery.variable ? [currentQuery.variable] : [])).includes(code);
+                          const isActive = selectedMeasures.includes(code);
                           const inputId = `imf-${cat.catKey}-${code}`;
                           return (
                             <label
