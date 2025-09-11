@@ -40,6 +40,9 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
   // Local input state for years to avoid clamping on every keystroke
   const [fromYearInput, setFromYearInput] = useState<string>(String(currentQuery.startYear));
   const [toYearInput, setToYearInput] = useState<string>(String(currentQuery.endYear));
+  // Measurement search
+  const [measureSearch, setMeasureSearch] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const filteredCountries = useMemo(() => {
     return countrySearch ? searchCountries(countrySearch) : COUNTRIES;
@@ -51,6 +54,50 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
 
   const getVariables = (category: VDemCategory, subcat: string) =>
     getVariablesForSubcategory(category, subcat);
+
+  // Build a flat index of all V-Dem and IMF measures for search suggestions
+  type MeasureSuggestion =
+    | { dataset: 'vdem'; label: string; code: string; cat: VDemCategory; sub: string }
+    | { dataset: 'imf'; label: string; code: string; imfCat: 'imf-weo' | 'imf-nea' };
+
+  const allSuggestions: MeasureSuggestion[] = useMemo(() => {
+    const list: MeasureSuggestion[] = [];
+    // V-Dem variables
+    for (const cat of CATEGORIES) {
+      const subs = getSubcategoriesForCategory(cat);
+      for (const sub of subs) {
+        const vars = getVariables(cat, sub);
+        for (const vLabel of vars) {
+          const code = getVariableCode(vLabel) ?? vLabel;
+          if (!code || HIDDEN_VARIABLE_CODES.has(code)) continue;
+          list.push({ dataset: 'vdem', label: vLabel, code, cat, sub });
+        }
+      }
+    }
+    // IMF variables
+    for (const [code, desc] of Object.entries(IMF_WEO_CODE_TO_DESC)) {
+      list.push({ dataset: 'imf', label: desc, code, imfCat: 'imf-weo' });
+    }
+    for (const [code, desc] of Object.entries(IMF_NEA_CODE_TO_DESC)) {
+      list.push({ dataset: 'imf', label: desc, code, imfCat: 'imf-nea' });
+    }
+    return list;
+  }, []);
+
+  const filteredSuggestions: MeasureSuggestion[] = useMemo(() => {
+    const q = measureSearch.trim().toLowerCase();
+    if (!q) return [];
+    const max = 12;
+    const out: MeasureSuggestion[] = [];
+    for (const s of allSuggestions) {
+      const hay = (s.label + ' ' + s.code).toLowerCase();
+      if (hay.includes(q)) {
+        out.push(s);
+        if (out.length >= max) break;
+      }
+    }
+    return out;
+  }, [measureSearch, allSuggestions]);
 
   const toggleCountry = (countryId: string) => {
     const newCountries = currentQuery.countries.includes(countryId)
@@ -356,6 +403,41 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
     }
   };
 
+  const selectSuggestion = (s: MeasureSuggestion) => {
+    if (s.dataset === 'vdem') {
+      selectVariable(s.cat, s.sub, s.code);
+      // Reveal for better UX
+      revealMeasure(s.code, s.label);
+    } else {
+      // IMF variable selection mirrors the keyboard branch for imfVariable
+      const currentVars = currentQuery.variables ?? [];
+      const code = s.code;
+      const nextVars = currentVars.includes(code)
+        ? currentVars.filter(v => v !== code)
+        : (currentVars.length < 5 ? [...currentVars, code] : currentVars);
+      if (nextVars !== currentVars) {
+        onQueryChange({
+          ...currentQuery,
+          variables: nextVars,
+          variable: nextVars[0]
+        });
+      }
+      revealMeasure(code, s.label);
+    }
+    setShowSuggestions(false);
+    setMeasureSearch('');
+  };
+
+  const onMeasureSearchKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === 'Enter' && filteredSuggestions.length > 0) {
+      e.preventDefault();
+      selectSuggestion(filteredSuggestions[0]);
+    }
+    if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
+  };
+
   const commitYear = (field: 'startYear' | 'endYear', value: string) => {
     const now = new Date().getFullYear();
     const parsed = parseInt(value, 10);
@@ -483,6 +565,43 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
 
   return (
     <div className="h-full bg-card p-4" id="sidebar-scroll-container">
+      {/* Measurement search */}
+      <div className="mb-4 relative">
+        <Label className="text-xs">Search measurements</Label>
+        <Input
+          placeholder="Search by name or code..."
+          value={measureSearch}
+          onChange={(e) => { setMeasureSearch(e.target.value); setShowSuggestions(true); }}
+          onFocus={() => setShowSuggestions(true)}
+          onKeyDown={onMeasureSearchKeyDown}
+        />
+        {showSuggestions && filteredSuggestions.length > 0 && (
+          <div className="absolute z-10 mt-1 w-full max-h-64 overflow-auto rounded-md border border-border bg-popover shadow">
+            <ul className="divide-y divide-border">
+              {filteredSuggestions.map((s, idx) => (
+                <li key={`${s.dataset}-${s.code}-${idx}`}>
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-2 hover:bg-muted flex items-start gap-2"
+                    onClick={() => selectSuggestion(s)}
+                  >
+                    <span className="text-xs rounded px-1 py-0.5 border border-border">
+                      {s.dataset === 'vdem' ? 'V-Dem' : 'IMF'}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-sm truncate">{s.label}</div>
+                      <div className="text-xs text-muted-foreground truncate">{s.code}</div>
+                      {s.dataset === 'vdem' && (
+                        <div className="text-[10px] text-muted-foreground truncate">{s.cat} • {s.sub}</div>
+                      )}
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
       {/* Selected countries as removable buttons */}
       {currentQuery.countries.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">

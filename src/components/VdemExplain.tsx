@@ -24,6 +24,8 @@ export default function VdemExplain({ selectedVdemVars, selectedCountries }: Pro
   const [error, setError] = useState<string | null>(null);
   const [resultText, setResultText] = useState<string | null>(null);
   const [rawJson, setRawJson] = useState<Record<string, unknown> | null>(null);
+  const [timestamp, setTimestamp] = useState<Date | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   // Disable submission if required fields missing
   const canSubmit = useMemo(() => {
@@ -46,7 +48,7 @@ export default function VdemExplain({ selectedVdemVars, selectedCountries }: Pro
       };
       if (execute) payload.execute = true;
 
-      const data = await apiService.explainRelationships(payload);
+  const data = await apiService.explainRelationships(payload);
       setRawJson(data);
 
       // Expecting JSON with { explanation: string }
@@ -58,6 +60,8 @@ export default function VdemExplain({ selectedVdemVars, selectedCountries }: Pro
       } else {
         setResultText(explanation);
       }
+  setTimestamp(new Date());
+  setExpanded(false);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to fetch explanation';
       setError(message);
@@ -129,11 +133,49 @@ export default function VdemExplain({ selectedVdemVars, selectedCountries }: Pro
       {/* Results */}
       {(resultText || rawJson) && (
         <div className="mt-4 space-y-3">
-          {resultText && (
-            <div className="bg-muted text-sm rounded-md p-4 whitespace-pre-wrap max-h-80 overflow-auto">
-              {resultText}
+          <div className="bg-card border border-border rounded-xl">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-border">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Model explanation</span>
+                {timestamp && (
+                  <span className="text-xs text-muted-foreground">· {timestamp.toLocaleString()}</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => resultText && navigator.clipboard.writeText(resultText)}
+                >
+                  Copy explanation
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setExpanded((v) => !v)}
+                >
+                  {expanded ? 'Collapse' : 'Expand'}
+                </Button>
+              </div>
+            </div>
+            {resultText && (
+              <div className={
+                `px-4 py-3 text-sm ${expanded ? '' : 'max-h-80 overflow-auto'}`
+              }>
+                {renderFormatted(resultText)}
+              </div>
+            )}
+          </div>
+
+          {/* Optional warnings from backend if present */}
+          {rawJson && Boolean((rawJson as Record<string, unknown>)['metadataMissing']) && (
+            <div className="text-amber-600 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-md p-3 text-sm">
+              Some metadata is missing for a complete explanation. Results may be incomplete.
             </div>
           )}
+
           {/* Keep the last JSON visible for debugging/inspection */}
           {rawJson && (
             <details className="bg-card border rounded-lg p-3">
@@ -149,4 +191,62 @@ export default function VdemExplain({ selectedVdemVars, selectedCountries }: Pro
       {/* TODO: consider persisting last explanation to localStorage if UX requires persistence across navigation. */}
     </section>
   );
+}
+
+// Lightweight formatter: paragraphs, bullet lists, and **bold** spans
+function renderFormatted(text: string): React.ReactNode {
+  const lines = text.split('\n');
+  const blocks: React.ReactNode[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.trim().startsWith('- ')) {
+      const items: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith('- ')) {
+        items.push(lines[i].trim().slice(2));
+        i++;
+      }
+      blocks.push(
+        <ul className="list-disc ml-5 my-2">
+          {items.map((it, idx) => (
+            <li key={idx}>{renderInline(it)}</li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+
+    if (line.trim().length === 0) {
+      blocks.push(<div className="h-2" />);
+      i++;
+      continue;
+    }
+
+    // Default paragraph
+    blocks.push(<p className="mb-2">{renderInline(line)}</p>);
+    i++;
+  }
+
+  return <article>{blocks}</article>;
+}
+
+function renderInline(s: string): React.ReactNode[] {
+  // Convert **bold** spans to <strong>
+  const parts: React.ReactNode[] = [];
+  const regex = /\*\*(.*?)\*\*/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(s)) !== null) {
+    const [full, inner] = match;
+    const start = match.index;
+    if (start > lastIndex) {
+      parts.push(s.slice(lastIndex, start));
+    }
+    parts.push(<strong>{inner}</strong>);
+    lastIndex = start + full.length;
+  }
+  if (lastIndex < s.length) {
+    parts.push(s.slice(lastIndex));
+  }
+  return parts;
 }
