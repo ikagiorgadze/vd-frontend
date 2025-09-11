@@ -10,6 +10,7 @@ import { fetchVDemData, VDemDataPoint } from '@/lib/data';
 import { getVariableById } from '@/lib/variables';
 import { getCountryById } from '@/lib/countries';
 import { QueryState, stateToUrlParams } from '@/lib/url-state';
+import VdemExplain from '@/components/VdemExplain';
 
 
 type ChartExplorerProps = {
@@ -329,6 +330,11 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
                   <div className="space-y-6">
                     {vdemAll.map((v) => renderChartCard(v))}
                   </div>
+                  {/* Explain relationships widget */}
+                  <VdemExplain
+                    selectedVdemVars={vdemAll}
+                    selectedCountries={currentQuery.countries}
+                  />
                 </section>
               )}
 
