@@ -24,10 +24,8 @@ export function GlobalHeader({ onQueryChange, currentQuery }: GlobalHeaderProps)
               onClick={() => navigate('/')}
               className="flex items-center gap-3 hover:opacity-80 transition-opacity"
             >
-              <div className="w-8 h-8 bg-gradient-to-r from-primary-blue to-primary-purple rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">VD</span>
-              </div>
-              <span className="font-bold text-xl">V-Dem Explorer</span>
+              <img src="/demolytics-mark.svg" alt="Demolytics mark" className="w-8 h-8" />
+              <span className="font-bold text-xl">Demolytics Dashboard</span>
             </button>
 
             {/* Explore Data button (right) */}

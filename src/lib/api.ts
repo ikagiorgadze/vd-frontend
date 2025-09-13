@@ -88,30 +88,44 @@ export class VDemApiService {
     }
   }
 
-  // Explain relationships between two V-Dem indices
+  // Explain relationships between two indices (dataset-agnostic)
   // Uses existing API base and fetch infra to avoid duplication.
   async explainRelationships(payload: {
     indexA: string;
     indexB: string;
     country: string;
-    // execute?: boolean; // Optional: backend may support prompt-only vs execute; keep minimal for now
+    execute?: boolean;
   }): Promise<{ explanation?: string } & Record<string, unknown>> {
     try {
-      const response = await fetch(`${API_BASE_URL}/v-dem/analysis/relationships/explain`, {
+  const response = await fetch(`${API_BASE_URL}/analysis/relationships/explain`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, execute: true }),
       });
 
       if (!response.ok) {
         throw new Error(`Explain API failed: ${response.status} ${response.statusText}`);
       }
 
-      // Backend returns JSON with { explanation: string }
-      const data = (await response.json()) as { explanation?: string } & Record<string, unknown>;
-      return data;
+      // Backend may return JSON or plain text. Normalize to { explanation }
+      const contentType = response.headers.get('content-type') || '';
+      const raw = await response.text();
+      try {
+        if (contentType.includes('application/json') || raw.trim().startsWith('{')) {
+          const parsed = JSON.parse(raw) as { explanation?: string } | string;
+          if (typeof parsed === 'string') {
+            return { explanation: parsed };
+          }
+          if (parsed && typeof parsed.explanation === 'string') {
+            return parsed as { explanation: string };
+          }
+        }
+      } catch {
+        // ignore and fall back to raw text
+      }
+      return { explanation: raw };
     } catch (error) {
       console.error('Explain API request failed:', error);
       // TODO: refine error propagation/shape for UI handling

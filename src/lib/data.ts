@@ -1,6 +1,6 @@
 import { apiService, ApiQueryRequest, ApiDataPoint } from './api';
 import { getVariableCode, getVariableName } from './variable-codes';
-import { getImfVariableCode, IMF_NEA_CODE_TO_DESC } from './imf-codes';
+import { getImfVariableCode, IMF_NEA_CODE_TO_DESC, IMF_CODE_PATTERN } from './imf-codes';
 import { getCountryById } from './countries';
 
 export interface VDemDataPoint {
@@ -23,7 +23,7 @@ function transformApiData(
     if (imf) variableCode = imf;
   }
   // If still not found but looks like an IMF code pattern, use raw
-  if (!variableCode && /^[A-Z0-9_]+(\.[A-Z0-9]+){1,4}$/.test(variable)) {
+  if (!variableCode && IMF_CODE_PATTERN.test(variable)) {
     variableCode = variable;
   }
   if (!variableCode) {
@@ -150,7 +150,7 @@ export async function fetchVDemData(
 
   try {
     // Decide which endpoint to hit: IMF codes use uppercase with dots; V-Dem codes start with v2/v3 or e_ etc.
-    const isImf = /[A-Z]/.test(variableCode) && /\./.test(variableCode) && !/^v\d|^e_/i.test(variableCode);
+    const isImf = IMF_CODE_PATTERN.test(variableCode) && !/^v\d|^e_/i.test(variableCode);
     let apiData: ApiDataPoint[];
     if (isImf) {
       // Detect NEA vs WEO: NEA codes in our list IMF_NEA_CODE_TO_DESC

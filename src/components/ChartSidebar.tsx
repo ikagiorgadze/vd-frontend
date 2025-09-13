@@ -11,8 +11,11 @@ import { HIDDEN_VARIABLE_CODES } from '@/lib/hidden-variables';
 import { getVariableById, getSubcategoryById } from '@/lib/variables';
 import { getMeasurePathByCode, getMeasurePathByLabel } from '@/lib/measure-index';
 import { getVariableName } from '@/lib/variable-codes';
-import { PlusSquare, MinusSquare, X } from 'lucide-react';
+import { ChevronRight, ChevronDown, X } from 'lucide-react';
+import WEO_GROUPS from '@/weo-indicator-series-codes.json';
+import NEA_GROUPS from '@/nea-indicator-series-codes.json';
 import { IMF_WEO_CODE_TO_DESC, IMF_NEA_CODE_TO_DESC } from '@/lib/imf-codes';
+import { toast as notify } from '@/components/ui/sonner';
 
 interface ChartSidebarProps {
   currentQuery: QueryState;
@@ -90,7 +93,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
     const max = 12;
     const out: MeasureSuggestion[] = [];
     for (const s of allSuggestions) {
-      const hay = (s.label + ' ' + s.code).toLowerCase();
+      const hay = s.label.toLowerCase();
       if (hay.includes(q)) {
         out.push(s);
         if (out.length >= max) break;
@@ -100,9 +103,17 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
   }, [measureSearch, allSuggestions]);
 
   const toggleCountry = (countryId: string) => {
-    const newCountries = currentQuery.countries.includes(countryId)
-      ? currentQuery.countries.filter(id => id !== countryId)
-      : [...currentQuery.countries, countryId];
+    const isSelected = currentQuery.countries.includes(countryId);
+    if (isSelected) {
+      const newCountries = currentQuery.countries.filter(id => id !== countryId);
+      onQueryChange({ ...currentQuery, countries: newCountries });
+      return;
+    }
+    if (currentQuery.countries.length >= 5) {
+      notify.error('Maximum of 5 countries allowed');
+      return;
+    }
+    const newCountries = [...currentQuery.countries, countryId];
     onQueryChange({ ...currentQuery, countries: newCountries });
   };
 
@@ -133,7 +144,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
     if (currentVars.includes(code)) {
       nextVars = currentVars.filter(v => v !== code);
     } else {
-      if (currentVars.length >= 5) return;
+  if (currentVars.length >= 4) { notify.error('Maximum of 4 measures allowed'); return; }
       nextVars = [...currentVars, code];
     }
     setSelectedCategory(cat);
@@ -206,7 +217,8 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
     | { key: string; type: 'subcategory'; level: 3; cat: VDemCategory; sub: string }
     | { key: string; type: 'variable'; level: 4; cat: VDemCategory; sub: string; code: string }
     | { key: string; type: 'imfCategory'; level: 2; dataset: 'IMF Dataset'; catKey: string; label: string }
-    | { key: string; type: 'imfVariable'; level: 3; dataset: 'IMF Dataset'; catKey: string; code: string; label: string };
+    | { key: string; type: 'imfGroup'; level: 3; dataset: 'IMF Dataset'; catKey: string; groupKey: string; groupLabel: string }
+    | { key: string; type: 'imfVariable'; level: 3 | 4; dataset: 'IMF Dataset'; catKey: string; code: string; label: string; parentGroupKey?: string };
 
   const visibleItems: VisibleItem[] = useMemo(() => {
   const items: VisibleItem[] = [];
@@ -240,16 +252,34 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
     items.push({ key: IMF_DATASET_KEY, type: 'dataset', level: 1, dataset: 'IMF Dataset' });
     const imfExpanded = expandedDatasets.has(IMF_DATASET_KEY);
     if (imfExpanded) {
-      const imfCategories: { catKey: string; label: string; entries: [string, string][] }[] = [
-        { catKey: 'imf-nea', label: 'National Economic Accounts (NEA)', entries: Object.entries(IMF_NEA_CODE_TO_DESC) },
-        { catKey: 'imf-weo', label: 'World Economic Outlook (WEO)', entries: Object.entries(IMF_WEO_CODE_TO_DESC) }
-      ];
-      for (const cat of imfCategories) {
-        const catKeyFull = `imfcat::${cat.catKey}`;
-        items.push({ key: catKeyFull, type: 'imfCategory', level: 2, dataset: 'IMF Dataset', catKey: cat.catKey, label: cat.label });
-        if (expandedImfCategories.has(cat.catKey)) {
-          for (const [code, desc] of cat.entries) {
-            items.push({ key: `imfvar::${code}`, type: 'imfVariable', level: 3, dataset: 'IMF Dataset', catKey: cat.catKey, code, label: desc });
+      // NEA: flat list ordered by NEA_GROUPS (label -> code)
+      {
+        const catKey = 'imf-nea';
+        const catKeyFull = `imfcat::${catKey}`;
+        items.push({ key: catKeyFull, type: 'imfCategory', level: 2, dataset: 'IMF Dataset', catKey, label: 'National Economic Accounts (NEA)' });
+        if (expandedImfCategories.has(catKey)) {
+          for (const [label, code] of Object.entries(NEA_GROUPS as Record<string, string>)) {
+            const desc = IMF_NEA_CODE_TO_DESC[code] || label;
+            items.push({ key: `imfvar::${code}`, type: 'imfVariable', level: 3, dataset: 'IMF Dataset', catKey, code, label: desc });
+          }
+        }
+      }
+      // WEO: grouped with submenus
+      {
+        const catKey = 'imf-weo';
+        const catKeyFull = `imfcat::${catKey}`;
+        items.push({ key: catKeyFull, type: 'imfCategory', level: 2, dataset: 'IMF Dataset', catKey, label: 'World Economic Outlook (WEO)' });
+        if (expandedImfCategories.has(catKey)) {
+          const groups = WEO_GROUPS as Record<string, string[]>;
+          for (const [groupLabel, codes] of Object.entries(groups)) {
+            const groupKey = `${catKey}::${groupLabel}`;
+            items.push({ key: `imfgroup::${groupKey}`, type: 'imfGroup', level: 3, dataset: 'IMF Dataset', catKey, groupKey, groupLabel });
+            if (expandedSubcats.has(groupKey)) {
+              for (const code of codes) {
+                const desc = IMF_WEO_CODE_TO_DESC[code] || IMF_NEA_CODE_TO_DESC[code] || code;
+                items.push({ key: `imfvar::${code}`, type: 'imfVariable', level: 4, dataset: 'IMF Dataset', catKey, code, label: desc, parentGroupKey: groupKey });
+              }
+            }
           }
         }
       }
@@ -317,6 +347,14 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
           const nextItem = visibleItems[idx + 1];
           if (nextItem && nextItem.level > current.level) moveFocusToIndex(idx + 1);
         }
+      } else if (current.type === 'imfGroup') {
+        const groupKey = current.groupKey;
+        if (!expandedSubcats.has(groupKey)) {
+          const next = new Set(expandedSubcats); next.add(groupKey); setExpandedSubcats(next);
+        } else {
+          const nextItem = visibleItems[idx + 1];
+          if (nextItem && nextItem.level > current.level) moveFocusToIndex(idx + 1);
+        }
       } else if (current.type === 'category') {
         if (!expandedCategories.has(current.cat)) {
           expandCategory(current.cat);
@@ -349,6 +387,13 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
         } else {
           moveFocusToKey(IMF_DATASET_KEY);
         }
+      } else if (current.type === 'imfGroup') {
+        const groupKey = current.groupKey;
+        if (expandedSubcats.has(groupKey)) {
+          const next = new Set(expandedSubcats); next.delete(groupKey); setExpandedSubcats(next);
+        } else {
+          moveFocusToKey(`imfcat::${current.catKey}`);
+        }
       } else if (current.type === 'category') {
         if (expandedCategories.has(current.cat)) {
           collapseCategory(current.cat);
@@ -365,7 +410,11 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
       } else if (current.type === 'variable') {
         moveFocusToKey(`sub::${current.cat}::${current.sub}`);
       } else if (current.type === 'imfVariable') {
-        moveFocusToKey(`imfcat::${current.catKey}`);
+        if (current.catKey === 'imf-weo' && current.parentGroupKey) {
+          moveFocusToKey(`imfgroup::${current.parentGroupKey}`);
+        } else {
+          moveFocusToKey(`imfcat::${current.catKey}`);
+        }
       }
       return;
     }
@@ -380,13 +429,19 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
         const next = new Set(expandedImfCategories);
         if (next.has(current.catKey)) next.delete(current.catKey); else next.add(current.catKey);
         setExpandedImfCategories(next);
+      } else if (current.type === 'imfGroup') {
+        const groupKey = current.groupKey;
+        const next = new Set(expandedSubcats);
+        if (next.has(groupKey)) next.delete(groupKey); else next.add(groupKey);
+        setExpandedSubcats(next);
       } else if (current.type === 'imfVariable') {
         // IMF selection: mimic selectVariable but without category/subcategory changes
         const currentVars = currentQuery.variables ?? [];
         const code = current.code;
-        const nextVars = currentVars.includes(code)
+        const already = currentVars.includes(code);
+        const nextVars = already
           ? currentVars.filter(v => v !== code)
-          : (currentVars.length < 5 ? [...currentVars, code] : currentVars);
+          : (currentVars.length < 4 ? [...currentVars, code] : (notify.error('Maximum of 4 measures allowed'), currentVars));
         if (nextVars !== currentVars) {
           onQueryChange({
             ...currentQuery,
@@ -412,9 +467,10 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
       // IMF variable selection mirrors the keyboard branch for imfVariable
       const currentVars = currentQuery.variables ?? [];
       const code = s.code;
-      const nextVars = currentVars.includes(code)
+      const already = currentVars.includes(code);
+      const nextVars = already
         ? currentVars.filter(v => v !== code)
-        : (currentVars.length < 5 ? [...currentVars, code] : currentVars);
+        : (currentVars.length < 4 ? [...currentVars, code] : (notify.error('Maximum of 4 measures allowed'), currentVars));
       if (nextVars !== currentVars) {
         onQueryChange({
           ...currentQuery,
@@ -565,43 +621,6 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
 
   return (
     <div className="h-full bg-card p-4" id="sidebar-scroll-container">
-      {/* Measurement search */}
-      <div className="mb-4 relative">
-        <Label className="text-xs">Search measurements</Label>
-        <Input
-          placeholder="Search by name or code..."
-          value={measureSearch}
-          onChange={(e) => { setMeasureSearch(e.target.value); setShowSuggestions(true); }}
-          onFocus={() => setShowSuggestions(true)}
-          onKeyDown={onMeasureSearchKeyDown}
-        />
-        {showSuggestions && filteredSuggestions.length > 0 && (
-          <div className="absolute z-10 mt-1 w-full max-h-64 overflow-auto rounded-md border border-border bg-popover shadow">
-            <ul className="divide-y divide-border">
-              {filteredSuggestions.map((s, idx) => (
-                <li key={`${s.dataset}-${s.code}-${idx}`}>
-                  <button
-                    type="button"
-                    className="w-full text-left px-3 py-2 hover:bg-muted flex items-start gap-2"
-                    onClick={() => selectSuggestion(s)}
-                  >
-                    <span className="text-xs rounded px-1 py-0.5 border border-border">
-                      {s.dataset === 'vdem' ? 'V-Dem' : 'IMF'}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="text-sm truncate">{s.label}</div>
-                      <div className="text-xs text-muted-foreground truncate">{s.code}</div>
-                      {s.dataset === 'vdem' && (
-                        <div className="text-[10px] text-muted-foreground truncate">{s.cat} • {s.sub}</div>
-                      )}
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
       {/* Selected countries as removable buttons */}
       {currentQuery.countries.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
@@ -680,6 +699,48 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
         </div>
       </div>
 
+      {/* Measurement search (moved above Measures) */}
+      <div className="mb-3 relative">
+        <Label className="text-xs">Search measurements</Label>
+        <Input
+          placeholder="Search by name..."
+          value={measureSearch}
+          onChange={(e) => { setMeasureSearch(e.target.value); setShowSuggestions(true); }}
+          onFocus={() => setShowSuggestions(true)}
+          onKeyDown={onMeasureSearchKeyDown}
+        />
+        {showSuggestions && filteredSuggestions.length > 0 && (
+          <div className="absolute z-10 mt-1 w-full max-h-64 overflow-auto rounded-md border border-border bg-popover shadow">
+            <ul className="divide-y divide-border">
+              {filteredSuggestions.map((s, idx) => (
+                <li key={`${s.dataset}-${s.code}-${idx}`}>
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-2 hover:bg-muted flex items-start gap-2"
+                    onClick={() => selectSuggestion(s)}
+                  >
+                    <span className="text-xs rounded px-1 py-0.5 border border-border">
+                      {s.dataset === 'vdem' ? 'V-Dem' : 'IMF'}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-sm truncate">{s.label}</div>
+                      {s.dataset === 'vdem' && (
+                        <div className="text-[10px] text-muted-foreground truncate">{s.cat} • {s.sub}</div>
+                      )}
+                      {s.dataset === 'imf' && (
+                        <div className="text-[10px] text-muted-foreground truncate">
+                          {s.imfCat === 'imf-weo' ? 'World Economic Outlook (WEO)' : 'National Economic Accounts (NEA)'}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
       {/* Measures: selected pills and tree */}
       <div className="space-y-2">
         <Label className="text-xs">Measures</Label>
@@ -725,7 +786,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
             aria-expanded={expandedDatasets.has(VDEM_DATASET_KEY)}
             onFocus={() => setFocusedKey(VDEM_DATASET_KEY)}
           >
-            {expandedDatasets.has(VDEM_DATASET_KEY) ? <MinusSquare className="h-4 w-4" /> : <PlusSquare className="h-4 w-4" />}
+            {expandedDatasets.has(VDEM_DATASET_KEY) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             <span>V-Dem Dataset</span>
           </button>
 
@@ -745,7 +806,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                       aria-expanded={expanded}
                       onFocus={() => setFocusedKey(`cat::${cat}`)}
                     >
-                      {expanded ? <MinusSquare className="h-4 w-4" /> : <PlusSquare className="h-4 w-4" />}
+                      {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                       <span>{cat}</span>
                     </button>
                     {expanded && (
@@ -769,7 +830,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                                 aria-expanded={subExpanded}
                                 onFocus={() => setFocusedKey(`sub::${subKey}`)}
                               >
-                                {subExpanded ? <MinusSquare className="h-4 w-4" /> : <PlusSquare className="h-4 w-4" />}
+                                {subExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                                 <span>{sub}</span>
                               </button>
                               {subExpanded && (
@@ -828,24 +889,23 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
             aria-expanded={expandedDatasets.has(IMF_DATASET_KEY)}
             onFocus={() => setFocusedKey(IMF_DATASET_KEY)}
           >
-            {expandedDatasets.has(IMF_DATASET_KEY) ? <MinusSquare className="h-4 w-4" /> : <PlusSquare className="h-4 w-4" />}
+            {expandedDatasets.has(IMF_DATASET_KEY) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             <span>IMF Dataset</span>
           </button>
 
           {expandedDatasets.has(IMF_DATASET_KEY) && (
             <div className="py-1">
-              {[
-                { catKey: 'imf-nea', label: 'National Economic Accounts (NEA)', entries: Object.entries(IMF_NEA_CODE_TO_DESC) },
-                { catKey: 'imf-weo', label: 'World Economic Outlook (WEO)', entries: Object.entries(IMF_WEO_CODE_TO_DESC) }
-              ].map(cat => {
-                const expanded = expandedImfCategories.has(cat.catKey);
-                const catRowKey = `imfcat::${cat.catKey}`;
+              {/* NEA: flat list (no submenus) */}
+              {(() => {
+                const catKey = 'imf-nea';
+                const expanded = expandedImfCategories.has(catKey);
+                const catRowKey = `imfcat::${catKey}`;
                 return (
-                  <div key={cat.catKey}>
+                  <div key={catKey}>
                     <button
                       onClick={() => {
                         const next = new Set(expandedImfCategories);
-                        if (next.has(cat.catKey)) next.delete(cat.catKey); else next.add(cat.catKey);
+                        if (next.has(catKey)) next.delete(catKey); else next.add(catKey);
                         setExpandedImfCategories(next);
                       }}
                       className="w-full flex items-center gap-2 text-left pr-3 pl-6 py-2 text-sm hover:bg-muted"
@@ -856,14 +916,14 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                       aria-expanded={expanded}
                       onFocus={() => setFocusedKey(catRowKey)}
                     >
-                      {expanded ? <MinusSquare className="h-4 w-4" /> : <PlusSquare className="h-4 w-4" />}
-                      <span>{cat.label}</span>
+                      {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      <span>National Economic Accounts (NEA)</span>
                     </button>
                     {expanded && (
                       <div className="py-1">
-                        {cat.entries.map(([code, desc]) => {
+                        {Object.entries(NEA_GROUPS as Record<string, string>).map(([label, code]) => {
                           const isActive = selectedMeasures.includes(code);
-                          const inputId = `imf-${cat.catKey}-${code}`;
+                          const inputId = `imf-nea-${code}`;
                           return (
                             <label
                               key={code}
@@ -881,15 +941,16 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                                 checked={isActive}
                                 onCheckedChange={() => {
                                   const currentVars = currentQuery.variables ?? [];
-                                  const nextVars = currentVars.includes(code)
+                                  const already = currentVars.includes(code);
+                                  const nextVars = already
                                     ? currentVars.filter(v => v !== code)
-                                    : (currentVars.length < 5 ? [...currentVars, code] : currentVars);
+                                    : (currentVars.length < 4 ? [...currentVars, code] : (notify.error('Maximum of 4 measures allowed'), currentVars));
                                   if (nextVars !== currentVars) {
                                     onQueryChange({ ...currentQuery, variables: nextVars, variable: nextVars[0] });
                                   }
                                 }}
                               />
-                              <span>{desc}</span>
+                              <span>{label}</span>
                             </label>
                           );
                         })}
@@ -897,7 +958,103 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                     )}
                   </div>
                 );
-              })}
+              })()}
+
+              {/* WEO: grouped with submenus */}
+              {(() => {
+                const catKey = 'imf-weo';
+                const expanded = expandedImfCategories.has(catKey);
+                const catRowKey = `imfcat::${catKey}`;
+                const groups = WEO_GROUPS as Record<string, string[]>;
+                return (
+                  <div key={catKey}>
+                    <button
+                      onClick={() => {
+                        const next = new Set(expandedImfCategories);
+                        if (next.has(catKey)) next.delete(catKey); else next.add(catKey);
+                        setExpandedImfCategories(next);
+                      }}
+                      className="w-full flex items-center gap-2 text-left pr-3 pl-6 py-2 text-sm hover:bg-muted"
+                      ref={(el) => { rowRefs.current[catRowKey] = el; }}
+                      tabIndex={focusedKey === catRowKey ? 0 : -1}
+                      role="treeitem"
+                      aria-level={2}
+                      aria-expanded={expanded}
+                      onFocus={() => setFocusedKey(catRowKey)}
+                    >
+                      {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      <span>World Economic Outlook (WEO)</span>
+                    </button>
+                    {expanded && (
+                      <div className="py-1">
+                        {Object.entries(groups).map(([groupLabel, codes]) => {
+                          const groupKey = `${catKey}::${groupLabel}`;
+                          const groupExpanded = expandedSubcats.has(groupKey);
+                          return (
+                            <div key={groupKey}>
+                              <button
+                                onClick={() => {
+                                  const next = new Set(expandedSubcats);
+                                  if (next.has(groupKey)) next.delete(groupKey); else next.add(groupKey);
+                                  setExpandedSubcats(next);
+                                }}
+                                className="w-full flex items-center gap-2 text-left pr-3 pl-10 py-2 text-sm hover:bg-muted"
+                                ref={(el) => { rowRefs.current[`imfgroup::${groupKey}`] = el; }}
+                                tabIndex={focusedKey === `imfgroup::${groupKey}` ? 0 : -1}
+                                role="treeitem"
+                                aria-level={3}
+                                aria-expanded={groupExpanded}
+                                onFocus={() => setFocusedKey(`imfgroup::${groupKey}`)}
+                              >
+                                {groupExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                <span>{groupLabel}</span>
+                              </button>
+                              {groupExpanded && (
+                                <div className="py-1">
+                                  {codes.map((code) => {
+                                    const isActive = selectedMeasures.includes(code);
+                                    const inputId = `imf-code-${code}`;
+                                    const desc = IMF_WEO_CODE_TO_DESC[code] || IMF_NEA_CODE_TO_DESC[code] || code;
+                                    return (
+                                      <label
+                                        key={code}
+                                        id={`measure-${code}`}
+                                        ref={(node) => { measureRefs.current[code] = node; rowRefs.current[`imfvar::${code}`] = node; }}
+                                        htmlFor={inputId}
+                                        className="flex items-center gap-2 pr-3 pl-14 py-1.5 text-sm cursor-pointer hover:bg-muted rounded"
+                                        tabIndex={focusedKey === `imfvar::${code}` ? 0 : -1}
+                                        role="treeitem"
+                                        aria-level={4}
+                                        onFocus={() => setFocusedKey(`imfvar::${code}`)}
+                                      >
+                                        <Checkbox
+                                          id={inputId}
+                                          checked={isActive}
+                                          onCheckedChange={() => {
+                                            const currentVars = currentQuery.variables ?? [];
+                                            const already = currentVars.includes(code);
+                                            const nextVars = already
+                                              ? currentVars.filter(v => v !== code)
+                                              : (currentVars.length < 4 ? [...currentVars, code] : (notify.error('Maximum of 4 measures allowed'), currentVars));
+                                            if (nextVars !== currentVars) {
+                                              onQueryChange({ ...currentQuery, variables: nextVars, variable: nextVars[0] });
+                                            }
+                                          }}
+                                        />
+                                        <span>{desc}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

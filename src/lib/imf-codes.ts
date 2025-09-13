@@ -385,11 +385,11 @@ export const IMF_NEA_DESC_TO_CODE: Record<string, string> = Object.fromEntries(
 );
 
 // Pattern: IMF codes are typically uppercase alphanumerics with dots and a trailing period segment, e.g. NGDPD.A or B1GQ.V.XDC.A
-const IMF_CODE_PATTERN = /^[A-Z0-9_]+(\.[A-Z0-9]+){1,4}$/;
+export const IMF_CODE_PATTERN = /^[A-Z0-9_]+(\.[A-Z0-9]+){1,4}$/;
 
 export function getImfVariableCode(nameOrCode: string): string | undefined {
-  // If caller already passed a valid IMF code
-  if (IMF_CODE_PATTERN.test(nameOrCode) && (IMF_WEO_CODE_TO_DESC[nameOrCode] || IMF_NEA_CODE_TO_DESC[nameOrCode])) {
+  // If caller already passed something that looks like an IMF code, accept it as-is
+  if (IMF_CODE_PATTERN.test(nameOrCode)) {
     return nameOrCode;
   }
   // Lookup by description (exact match) in WEO first, then NEA
