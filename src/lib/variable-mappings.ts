@@ -625,9 +625,157 @@ export const SUBCATEGORY_VARIABLES = {
 
 // Helper functions
 export function getSubcategoriesForCategory(category: string): string[] {
-  return CATEGORY_SUBCATEGORIES[category] || [];
+  const subs = CATEGORY_SUBCATEGORIES[category] || [];
+  const HIDDEN_SUBCATEGORIES: Record<string, Set<string>> = {
+    'Elections & Voting': new Set(['General']),
+    'Political Parties & Competition': new Set(['Historical']),
+    'Legislatures & Representation': new Set(['Upper Chamber']),
+    'Context & Background Factors': new Set(['Unified Democracy Score', 'Others']),
+  };
+  const hidden = HIDDEN_SUBCATEGORIES[category];
+  return hidden ? subs.filter((s) => !hidden.has(s)) : subs;
 }
 
 export function getVariablesForSubcategory(category: string, subcategory: string): string[] {
-  return SUBCATEGORY_VARIABLES[category]?.[subcategory] || [];
+  const vars = SUBCATEGORY_VARIABLES[category]?.[subcategory] || [];
+
+  // Labels to hide per subcategory as requested
+  const HIDDEN_LABELS_BY_SUBCATEGORY: Record<string, Record<string, Set<string>>> = {
+    'Elections & Voting': {
+      'Suffrage': new Set([
+        'Minimum voting age',
+        'Suffrage level',
+      ]),
+      'Election Qualities': new Set([
+        'Election domestic election monitors',
+        'Election international monitors',
+        'Election international monitors denied',
+        'Monitors refuse to be present',
+        'Candidate restriction by ethnicity, race, religion, or language',
+      ]),
+      'Election Outcomes': new Set([
+        'Election turnout',
+        'Election VAP turnout',
+      ]),
+      'Executive Elections Specifics': new Set([
+        'HOG restriction by ethnicity, race, religion, or language',
+        'HOS restriction by ethnicity, race, religion, or language',
+        'Presidential election vote share of largest vote-getter',
+        'Presidential election vote share of second-largest vote-getter',
+      ]),
+      'Lower Chamber Specifics': new Set([
+        "Lower chamber 'base' tier electoral districts",
+        "Lower chamber 'base' or 'nominal' tier seats",
+        'Lower chamber election district effective magnitude',
+        'Lower chamber election district magnitude',
+        'Lower chamber electoral system — 13 categories',
+        'Lower chamber hybrid system reserved seats',
+        'Lower chamber election seats',
+        'Lower chamber election seats won by largest party',
+        'Lower chamber election seat share won by largest party',
+        'Lower chamber election seats won by second largest party',
+        'Lower chamber election seat share won by second largest party',
+        'Lower chamber election seats won by third largest party',
+        'Lower chamber election seat share won by third largest party',
+        "Lower chamber 'upper' tier electoral districts ",
+        'Lower chamber election vote share of largest vote-getter',
+        'Lower chamber election vote share of second-largest vote-getter',
+        'Lower chamber election vote share of third-largest vote-getter',
+        'Lower chamber electoral system',
+        'Lower chamber election statutory threshold',
+        'Lower chamber election turnover',
+      ]),
+      'Subnational': new Set([
+        'Regional government exists (A,C)',
+        'Local government exists (A,C)',
+      ]),
+      'Elections Overview': new Set([
+        'Electoral regime index',
+        'Executive electoral regime index',
+        'Legislative electoral regime index',
+      ]),
+    },
+    'Executive Power': {
+      'General': new Set([
+        'Chief executive appointment by upper chamber',
+        'Chief executive appointment by upper chamber implicit approval',
+      ]),
+      'Head of State': new Set([
+        'HOS = HOG',
+        'HOS age',
+        'HOS selection by legislature in practice',
+        'HOS directly elected',
+        'HOS female',
+        'HOS appointment in practice',
+        'HOS year of death',
+      ]),
+      'Head of Government': new Set([
+        'HOG age',
+        'HOG selection by legislature in practice',
+        'HOG directly elected',
+        'HOG female',
+        'HOG appointed by HOS',
+        'HOG appointment in practice',
+        'HOG year of death',
+      ]),
+    },
+    'Legislatures & Representation': {
+      'General': new Set([
+        'Legislature bicameral',
+        'Legislature dominant chamber',
+        'Legislature questions officials in practice',
+        'Legislature investigates in practice',
+        'Executive oversight',
+        'Legislature corrupt activities',
+        'Legislature opposition parties',
+        'Legislature controls resources',
+        'Relative power of the HOS',
+        'HOG appointed by legislature',
+        'HOS appointed by legislature',
+        'Legislature approval of treaties by law',
+        'Legislature declares war by law',
+      ]),
+      'Unicameral or Lower Chamber': new Set([
+        'Lower chamber legislates in practice',
+        'Lower chamber committees',
+        'Lower chamber members serve in government',
+        'Lower chamber elected',
+        'Percentage of indirectly elected legislators lower chamber',
+        'Lower chamber introduces bills',
+        'Lower chamber gender quota',
+        'Lower chamber gender quota placement mandate',
+        'Lower chamber gender quota threshold',
+      ]),
+    },
+    'Judiciary & Rule of Law': {
+      'General': new Set([
+        'Codeable',
+        'Corresponding flowchart',
+        'Language',
+        'Team translated',
+      ]),
+    },
+    'Civil Society & Media': {
+      'General': new Set([
+        "CSO women's participation",
+      ]),
+      'Social Cleavages': new Set([
+        "Average people's use of social media to organize offline action",
+        "Elites' use of social media to organize offline action",
+      ]),
+    },
+    'Democracy Indices & Regimes': {
+      'V-Dem Mid-Level Indices: Components of the Democracy Indices': new Set([
+        'Share of population with suffrage',
+        'Elected officials index',
+      ]),
+      'Direct Democracy (indices)': new Set([
+        'Popular refferendum index',
+      ]),
+    },
+  };
+
+  const hiddenForCat = HIDDEN_LABELS_BY_SUBCATEGORY[category]?.[subcategory];
+  if (!hiddenForCat) return vars;
+  return vars.filter((label) => !hiddenForCat.has(label));
 }

@@ -1,4 +1,4 @@
-# V-Dem Compare
+# Democracy Dashboard
 
 A modern web application for exploring and comparing democracy indicators from the V-Dem (Varieties of Democracy) v15 dataset. Built for politicians, researchers, and democracy enthusiasts.
 

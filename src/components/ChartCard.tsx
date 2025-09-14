@@ -10,9 +10,10 @@ interface ChartCardProps {
   data: VDemDataPoint[];
   countries: string[];
   onClick: () => void;
+  selected?: boolean;
 }
 
-export function ChartCard({ variable, data, countries, onClick }: ChartCardProps) {
+export function ChartCard({ variable, data, countries, onClick, selected = false }: ChartCardProps) {
   const formatValue = (value: number | null) => {
     if (value === null) return 'N/A';
     
@@ -44,7 +45,7 @@ export function ChartCard({ variable, data, countries, onClick }: ChartCardProps
   return (
     <div 
       onClick={onClick}
-      className="chart-card group"
+      className={`chart-card group ${selected ? 'border-success-green ring-2 ring-inset ring-success-green/50' : ''}`}
     >
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">

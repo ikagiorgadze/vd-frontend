@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { COUNTRIES, searchCountries } from '@/lib/countries';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -12,17 +12,24 @@ import { getVariableById, getSubcategoryById } from '@/lib/variables';
 import { getMeasurePathByCode, getMeasurePathByLabel } from '@/lib/measure-index';
 import { getVariableName } from '@/lib/variable-codes';
 import { ChevronRight, ChevronDown, X } from 'lucide-react';
+import { Tooltip as UiTooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import HelpIcon from '@/components/ui/help-icon';
 import WEO_GROUPS from '@/weo-indicator-series-codes.json';
 import NEA_GROUPS from '@/nea-indicator-series-codes.json';
 import { IMF_WEO_CODE_TO_DESC, IMF_NEA_CODE_TO_DESC } from '@/lib/imf-codes';
-import { toast as notify } from '@/components/ui/sonner';
+import { setImfOrigin } from '@/lib/imf-origin';
+import { toast as notify } from '@/components/ui/sonner-toast';
 
 interface ChartSidebarProps {
   currentQuery: QueryState;
   onQueryChange: (q: QueryState) => void;
+  // Optional registration function: parent can receive the revealMeasure callback
+  registerReveal?: (fn: ((code: string, displayLabel?: string) => void) | null) => void;
+  // Optional controls rendered under the time period section (e.g., "Explain Correlations" button)
+  explainControls?: React.ReactNode;
 }
 
-export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps) {
+export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, explainControls }: ChartSidebarProps) {
   const [countrySearch, setCountrySearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<VDemCategory | 'all'>(currentQuery.category || 'all');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>(currentQuery.subcategory || '');
@@ -43,9 +50,38 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
   // Local input state for years to avoid clamping on every keystroke
   const [fromYearInput, setFromYearInput] = useState<string>(String(currentQuery.startYear));
   const [toYearInput, setToYearInput] = useState<string>(String(currentQuery.endYear));
+  // Commit year changes with validation and clamping
+  const commitYear = (key: 'startYear' | 'endYear', value: string) => {
+    const parsed = parseInt(value, 10);
+    if (!Number.isFinite(parsed)) {
+      // Reset inputs if invalid
+      setFromYearInput(String(currentQuery.startYear));
+      setToYearInput(String(currentQuery.endYear));
+      return;
+    }
+    const rawStart = key === 'startYear' ? parsed : currentQuery.startYear;
+    const rawEnd = key === 'endYear' ? parsed : currentQuery.endYear;
+    const minYear = 1800;
+    const maxYear = new Date().getFullYear();
+  const start = Math.max(minYear, Math.min(maxYear, rawStart));
+  let end = Math.max(minYear, Math.min(maxYear, rawEnd));
+    if (end < start) end = start;
+    setFromYearInput(String(start));
+    setToYearInput(String(end));
+    onQueryChange({ ...currentQuery, startYear: start, endYear: end });
+  };
+  // Collapsed state for countries section
+  const [countriesCollapsed, setCountriesCollapsed] = useState<boolean>(false);
   // Measurement search
   const [measureSearch, setMeasureSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Ensure datasets and submenus are collapsed on first mount
+  useEffect(() => {
+    setExpandedDatasets(new Set());
+    setExpandedImfCategories(new Set());
+    setExpandedSubcats(new Set());
+  }, []);
 
   const filteredCountries = useMemo(() => {
     return countrySearch ? searchCountries(countrySearch) : COUNTRIES;
@@ -87,6 +123,12 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
     return list;
   }, []);
 
+  // Build WEO flat list from WEO JSON (label -> code)
+  const WEO_FLAT_LIST = useMemo(() => {
+    const flat = WEO_GROUPS as Record<string, string>;
+    return Object.entries(flat);
+  }, []);
+
   const filteredSuggestions: MeasureSuggestion[] = useMemo(() => {
     const q = measureSearch.trim().toLowerCase();
     if (!q) return [];
@@ -109,10 +151,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
       onQueryChange({ ...currentQuery, countries: newCountries });
       return;
     }
-    if (currentQuery.countries.length >= 5) {
-      notify.error('Maximum of 5 countries allowed');
-      return;
-    }
+  // No hard maximum — allow adding as many countries as the user wants
     const newCountries = [...currentQuery.countries, countryId];
     onQueryChange({ ...currentQuery, countries: newCountries });
   };
@@ -144,7 +183,6 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
     if (currentVars.includes(code)) {
       nextVars = currentVars.filter(v => v !== code);
     } else {
-  if (currentVars.length >= 4) { notify.error('Maximum of 4 measures allowed'); return; }
       nextVars = [...currentVars, code];
     }
     setSelectedCategory(cat);
@@ -252,40 +290,40 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
     items.push({ key: IMF_DATASET_KEY, type: 'dataset', level: 1, dataset: 'IMF Dataset' });
     const imfExpanded = expandedDatasets.has(IMF_DATASET_KEY);
     if (imfExpanded) {
-      // NEA: flat list ordered by NEA_GROUPS (label -> code)
+      // NEA: grouped with submenus (label -> codes[])
       {
         const catKey = 'imf-nea';
         const catKeyFull = `imfcat::${catKey}`;
         items.push({ key: catKeyFull, type: 'imfCategory', level: 2, dataset: 'IMF Dataset', catKey, label: 'National Economic Accounts (NEA)' });
         if (expandedImfCategories.has(catKey)) {
-          for (const [label, code] of Object.entries(NEA_GROUPS as Record<string, string>)) {
-            const desc = IMF_NEA_CODE_TO_DESC[code] || label;
-            items.push({ key: `imfvar::${code}`, type: 'imfVariable', level: 3, dataset: 'IMF Dataset', catKey, code, label: desc });
-          }
-        }
-      }
-      // WEO: grouped with submenus
-      {
-        const catKey = 'imf-weo';
-        const catKeyFull = `imfcat::${catKey}`;
-        items.push({ key: catKeyFull, type: 'imfCategory', level: 2, dataset: 'IMF Dataset', catKey, label: 'World Economic Outlook (WEO)' });
-        if (expandedImfCategories.has(catKey)) {
-          const groups = WEO_GROUPS as Record<string, string[]>;
+          const groups = NEA_GROUPS as Record<string, string[]>;
           for (const [groupLabel, codes] of Object.entries(groups)) {
             const groupKey = `${catKey}::${groupLabel}`;
             items.push({ key: `imfgroup::${groupKey}`, type: 'imfGroup', level: 3, dataset: 'IMF Dataset', catKey, groupKey, groupLabel });
             if (expandedSubcats.has(groupKey)) {
               for (const code of codes) {
-                const desc = IMF_WEO_CODE_TO_DESC[code] || IMF_NEA_CODE_TO_DESC[code] || code;
+                const desc = IMF_NEA_CODE_TO_DESC[code] || code;
                 items.push({ key: `imfvar::${code}`, type: 'imfVariable', level: 4, dataset: 'IMF Dataset', catKey, code, label: desc, parentGroupKey: groupKey });
               }
             }
           }
         }
       }
+      // WEO: flat list
+      {
+        const catKey = 'imf-weo';
+        const catKeyFull = `imfcat::${catKey}`;
+        items.push({ key: catKeyFull, type: 'imfCategory', level: 2, dataset: 'IMF Dataset', catKey, label: 'World Economic Outlook (WEO)' });
+        if (expandedImfCategories.has(catKey)) {
+          for (const [label, code] of WEO_FLAT_LIST) {
+            const desc = IMF_WEO_CODE_TO_DESC[code] || label;
+            items.push({ key: `imfvar::${code}`, type: 'imfVariable', level: 3, dataset: 'IMF Dataset', catKey, code, label: desc });
+          }
+        }
+      }
     }
     return items;
-  }, [expandedCategories, expandedSubcats, expandedDatasets, expandedImfCategories]);
+  }, [expandedCategories, expandedSubcats, expandedDatasets, expandedImfCategories, WEO_FLAT_LIST]);
 
   const getIndexByKey = (key: string) => visibleItems.findIndex(i => i.key === key);
   const moveFocusToIndex = (idx: number) => {
@@ -299,6 +337,8 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
       if (el) {
         el.focus({ preventScroll: true });
         const container =
+          document.getElementById('desktop-sidebar-scroll') ||
+          document.getElementById('mobile-sidebar-scroll') ||
           document.getElementById('sidebar-scroll-container') ||
           document.getElementById('mobile-sidebar-scroll-container');
         if (container) {
@@ -441,13 +481,15 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
         const already = currentVars.includes(code);
         const nextVars = already
           ? currentVars.filter(v => v !== code)
-          : (currentVars.length < 4 ? [...currentVars, code] : (notify.error('Maximum of 4 measures allowed'), currentVars));
+          : [...currentVars, code];
         if (nextVars !== currentVars) {
           onQueryChange({
             ...currentQuery,
             variables: nextVars,
             variable: nextVars[0]
           });
+          // Track origin for isNea routing
+          setImfOrigin(code, current.catKey === 'imf-nea' ? 'nea' : 'weo');
         }
       } else if (current.type === 'category') {
         toggleCategory(current.cat);
@@ -461,22 +503,15 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
   const selectSuggestion = (s: MeasureSuggestion) => {
     if (s.dataset === 'vdem') {
       selectVariable(s.cat, s.sub, s.code);
-      // Reveal for better UX
       revealMeasure(s.code, s.label);
     } else {
-      // IMF variable selection mirrors the keyboard branch for imfVariable
       const currentVars = currentQuery.variables ?? [];
       const code = s.code;
       const already = currentVars.includes(code);
-      const nextVars = already
-        ? currentVars.filter(v => v !== code)
-        : (currentVars.length < 4 ? [...currentVars, code] : (notify.error('Maximum of 4 measures allowed'), currentVars));
+      const nextVars = already ? currentVars.filter(v => v !== code) : [...currentVars, code];
       if (nextVars !== currentVars) {
-        onQueryChange({
-          ...currentQuery,
-          variables: nextVars,
-          variable: nextVars[0]
-        });
+        onQueryChange({ ...currentQuery, variables: nextVars, variable: nextVars[0] });
+        setImfOrigin(code, s.imfCat === 'imf-nea' ? 'nea' : 'weo');
       }
       revealMeasure(code, s.label);
     }
@@ -486,131 +521,90 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
 
   const onMeasureSearchKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key === 'Enter' && filteredSuggestions.length > 0) {
-      e.preventDefault();
       selectSuggestion(filteredSuggestions[0]);
     }
-    if (e.key === 'Escape') {
-      setShowSuggestions(false);
-    }
   };
-
-  const commitYear = (field: 'startYear' | 'endYear', value: string) => {
-    const now = new Date().getFullYear();
-    const parsed = parseInt(value, 10);
-    const fallback = field === 'startYear' ? 1800 : now;
-    const raw = Number.isFinite(parsed) ? parsed : fallback;
-    const clamped = Math.max(1800, Math.min(raw, now));
-    onQueryChange({ ...currentQuery, [field]: clamped });
-    if (field === 'startYear') setFromYearInput(String(clamped));
-    else setToYearInput(String(clamped));
-  };
-
-  // Keep local inputs in sync if query changes elsewhere
-  useEffect(() => {
-    setFromYearInput(String(currentQuery.startYear));
-  }, [currentQuery.startYear]);
-  useEffect(() => {
-    setToYearInput(String(currentQuery.endYear));
-  }, [currentQuery.endYear]);
-
-  // Remove a selected measure by its code
-  const removeMeasure = (code: string) => {
-    const currentVars = currentQuery.variables ?? (currentQuery.variable ? [currentQuery.variable] : []);
-    const nextVars = currentVars.filter(v => v !== code);
-    onQueryChange({
-      ...currentQuery,
-      variables: nextVars.length > 0 ? nextVars : undefined,
-      variable: nextVars.length > 0 ? nextVars[0] : undefined,
-    });
-  };
-
   // Reveal a measure in the tree (expand and schedule scroll)
-  const revealMeasure = (code: string, displayLabel?: string) => {
-    // First check if this is an IMF variable; if so expand IMF dataset + proper category
+  const revealMeasure = useCallback((code: string, displayLabel?: string) => {
+    // IMF variable?
     if (IMF_WEO_CODE_TO_DESC[code] || IMF_NEA_CODE_TO_DESC[code]) {
-      // Ensure IMF dataset expanded
+      // Expand IMF dataset
       setExpandedDatasets(prev => {
         if (prev.has(IMF_DATASET_KEY)) return prev;
         const next = new Set(prev); next.add(IMF_DATASET_KEY); return next;
       });
-      // Determine which IMF category contains the code
+      // Expand correct IMF category
       const catKey = IMF_WEO_CODE_TO_DESC[code] ? 'imf-weo' : 'imf-nea';
       setExpandedImfCategories(prev => {
         if (prev.has(catKey)) return prev;
         const next = new Set(prev); next.add(catKey); return next;
       });
-      // Focus key for IMF variable rows uses prefix imfvar::
+      // If NEA grouped, also expand the group containing this code
+      if (catKey === 'imf-nea') {
+        for (const [groupLabel, codes] of Object.entries(NEA_GROUPS as Record<string, string[]>)) {
+          if (codes.includes(code)) {
+            const groupKey = `${catKey}::${groupLabel}`;
+            setExpandedSubcats(prev => {
+              if (prev.has(groupKey)) return prev;
+              const next = new Set(prev); next.add(groupKey); return next;
+            });
+            break;
+          }
+        }
+      }
       setFocusedKey(`imfvar::${code}`);
       setPendingScrollCode(code);
-      return; // Done handling IMF variable
+      // Schedule a few retries to scroll into view
+      const tryScroll = () => {
+        const c = pendingScrollCode;
+        if (!c) return;
+        const el = measureRefs.current[c];
+        if (el) {
+          (el as HTMLElement).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          setPendingScrollCode(null);
+          scrollRetry.current = 0;
+        } else if (scrollRetry.current < 20) {
+          scrollRetry.current += 1;
+          requestAnimationFrame(tryScroll);
+        } else {
+          setPendingScrollCode(null);
+          scrollRetry.current = 0;
+        }
+      };
+      requestAnimationFrame(tryScroll);
+      return;
     }
+    // V-Dem variable
     const path =
       getMeasurePathByCode(code) ||
       (displayLabel ? getMeasurePathByLabel(displayLabel) : undefined) ||
       getMeasurePathByLabel(getVariableName(code) ?? code);
-    // Fallback to variables meta if index misses
     const meta = getVariableById(code);
     if (!path && !meta) return;
-    const cat = path?.category ?? meta!.category;
+    const cat = path?.category ?? meta!.category as VDemCategory;
     const sub = path?.subcategoryLabel ?? (getSubcategoryById(meta!.subcategory)?.label ?? meta!.subcategory);
-  const subKey = `${cat}::${sub}`;
-  // Collapse everything else and expand only the path to this measure
-  setExpandedCategories(new Set<VDemCategory>([cat]));
-  setExpandedSubcats(new Set<string>([subKey]));
-  // Update local structural context
-  setSelectedCategory(cat);
-  setSelectedSubcategory(sub);
-  // Set keyboard focus context to this variable row; no scrolling
-  setFocusedKey(`var::${code}`);
-  // Schedule a scroll so deep items become visible
-  setPendingScrollCode(code);
-  };
-
-  // Perform the scroll to the exact checkbox row once it exists
-  useEffect(() => {
-    if (!pendingScrollCode) return;
-    const code = pendingScrollCode;
-    let attempts = 0;
-    const maxAttempts = 60; // ~1 second at 60fps
-
+    const subKey = `${cat}::${sub}`;
+    setExpandedDatasets(prev => { if (prev.has(VDEM_DATASET_KEY)) return prev; const next = new Set(prev); next.add(VDEM_DATASET_KEY); return next; });
+    setExpandedCategories(prev => { if (prev.has(cat)) return prev; const next = new Set(prev); next.add(cat); return next; });
+    setExpandedSubcats(prev => { if (prev.has(subKey)) return prev; const next = new Set(prev); next.add(subKey); return next; });
+    setFocusedKey(`var::${code}`);
+    setPendingScrollCode(code);
     const tryScroll = () => {
-  const container = (document.getElementById('sidebar-scroll-container') || document.getElementById('mobile-sidebar-scroll-container')) as HTMLElement | null;
-      const el = measureRefs.current[code] || document.getElementById(`measure-${code}`);
-      if (container && el) {
-        // Scroll the element into view within the sidebar container
-        (el as HTMLElement).scrollIntoView({ block: 'center', behavior: 'smooth' });
-        (el as HTMLElement).classList.add('ring-2', 'ring-primary/50', 'rounded');
-        // Focus and set roving focus key
-  // Decide correct focus key based on whether this is a V-Dem or IMF variable row
-  const focusKey = rowRefs.current[`var::${code}`] ? `var::${code}` : (rowRefs.current[`imfvar::${code}`] ? `imfvar::${code}` : `var::${code}`);
-  setFocusedKey(focusKey);
-        (el as HTMLElement).focus?.({ preventScroll: true });
-        setTimeout(() => (el as HTMLElement).classList.remove('ring-2', 'ring-primary/50', 'rounded'), 1400);
-        // reset
+      const c = pendingScrollCode;
+      if (!c) return;
+      const el = measureRefs.current[c];
+      if (el) {
+        (el as HTMLElement).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         setPendingScrollCode(null);
         scrollRetry.current = 0;
-        return;
-      }
-      if (attempts < maxAttempts) {
-        attempts += 1;
+      } else if (scrollRetry.current < 20) {
+        scrollRetry.current += 1;
         requestAnimationFrame(tryScroll);
       } else {
-        // Fallback: scroll to subcategory header if available
-        const meta = getVariableById(code);
-        if (meta) {
-          const subKey = `sub::${meta.category}::${meta.subcategory}`;
-          const subEl = rowRefs.current[subKey] as HTMLElement | null;
-          if (subEl) {
-            subEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-            setFocusedKey(subKey);
-            subEl.focus({ preventScroll: true });
-          }
-        }
         setPendingScrollCode(null);
         scrollRetry.current = 0;
       }
     };
-
     requestAnimationFrame(tryScroll);
   }, [pendingScrollCode]);
 
@@ -618,152 +612,87 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
   const selectedMeasures: string[] = useMemo(() => (
     currentQuery.variables ?? (currentQuery.variable ? [currentQuery.variable] : [])
   ), [currentQuery.variables, currentQuery.variable]);
+  // Helper to annotate IMF codes with readable suffixes (currency / frequency)
+  const formatImfSuffix = (code: string) => {
+    if (!code) return '';
+  // WEO codes follow a dot-separated pattern. Examples:
+  // B1GQ.V.XDC.A  -> parts: [B1GQ, V, XDC, A]
+  // We specifically map the common suffix combinations used in WEO groups:
+  // V.XDC -> "Current prices in domestic currency"
+  // V.USD -> "Current prices in US dollar"
+  // Q.XDC -> "Constant prices in domestic currency"
+  // Q.USD -> "Constant prices in US dollar"
+  // PD / IX -> price-deflator / index
+  const parts = code.split('.').map(p => p.toUpperCase());
+
+  // Look for the pair of frequency + currency tokens anywhere in the parts
+  const hasV = parts.includes('V');
+  const hasQ = parts.includes('Q');
+  const hasXDC = parts.includes('XDC');
+  const hasUSD = parts.includes('USD');
+  const hasPD = parts.includes('PD');
+  const hasIX = parts.includes('IX');
+
+  const pieces: string[] = [];
+  if (hasV && hasXDC) pieces.push('Current prices in domestic currency');
+  else if (hasV && hasUSD) pieces.push('Current prices in US dollar');
+  else if (hasQ && hasXDC) pieces.push('Constant prices in domestic currency');
+  else if (hasQ && hasUSD) pieces.push('Constant prices in US dollar');
+
+  if (hasPD || hasIX) pieces.push('Price-deflator / index');
+
+  if (pieces.length === 0) return '';
+  return ` — ${pieces.join(', ')}`;
+  };
 
   return (
     <div className="h-full bg-card p-4" id="sidebar-scroll-container">
-      {/* Selected countries as removable buttons */}
-      {currentQuery.countries.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-2">
-          {currentQuery.countries.map((id) => {
-            const c = COUNTRIES.find(c => c.id === id);
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => removeCountry(id)}
-                title={`Remove ${c?.name || id}`}
-                className="inline-flex items-center gap-2 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
-              >
-                <span>{c?.name || id}</span>
-                <X className="h-3 w-3" />
-              </button>
-            );
-          })}
-        </div>
-      )}
+  {/* Measures: dataset menus moved to top (labels removed) */}
+  <div className="space-y-2 mb-4">
 
-      {/* Countries */}
-      <div className="space-y-2 mb-4">
-        <Label className="text-xs">Countries</Label>
-        <Input
-          placeholder="Search countries..."
-          value={countrySearch}
-          onChange={(e) => setCountrySearch(e.target.value)}
-        />
-        <div className="mt-1 max-h-40 overflow-auto rounded-md border border-border p-2">
-          {filteredCountries.map((c) => (
-            <div key={c.id} className="flex items-center gap-2 py-1">
-              <Checkbox
-                id={`country-${c.id}`}
-                checked={currentQuery.countries.includes(c.id)}
-                onCheckedChange={() => toggleCountry(c.id)}
-              />
-              <label htmlFor={`country-${c.id}`} className="text-sm cursor-pointer">
-                {c.name}
-              </label>
+  {/* Measurement search (label removed) */}
+  <div className="relative">
+          <Input
+            placeholder="Search by name..."
+            value={measureSearch}
+            onChange={(e) => { setMeasureSearch(e.target.value); setShowSuggestions(true); }}
+            onFocus={() => setShowSuggestions(true)}
+            onKeyDown={onMeasureSearchKeyDown}
+          />
+          {showSuggestions && filteredSuggestions.length > 0 && (
+            <div className="absolute z-10 mt-1 w-full max-h-64 overflow-auto rounded-md border border-border bg-popover shadow">
+              <ul className="divide-y divide-border">
+                {filteredSuggestions.map((s, idx) => (
+                  <li key={`${s.dataset}-${s.code}-${idx}`}>
+                    <button
+                      type="button"
+                      className="w-full text-left px-3 py-2 hover:bg-muted flex items-start gap-2"
+                      onClick={() => selectSuggestion(s)}
+                    >
+                      <span className="text-xs rounded px-1 py-0.5 border border-border">
+                        {s.dataset === 'vdem' ? 'V-Dem' : 'IMF'}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-sm truncate">{s.label}</div>
+                        {s.dataset === 'vdem' && (
+                          <div className="text-[10px] text-muted-foreground truncate">{s.cat} • {s.sub}</div>
+                        )}
+                        {s.dataset === 'imf' && (
+                          <div className="text-[10px] text-muted-foreground truncate">
+                            {s.imfCat === 'imf-weo' ? 'World Economic Outlook (WEO)' : 'National Economic Accounts (NEA)'}
+                            <div className="text-[10px] text-muted-foreground truncate">{formatImfSuffix(s.code)}</div>
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
-          ))}
+          )}
         </div>
-      </div>
 
-      {/* Time Period */}
-      <div className="space-y-2 mb-4">
-        <Label className="text-xs">Time Period</Label>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <Label htmlFor="from" className="text-xs">From</Label>
-            <Input
-              id="from"
-              type="number"
-              min={1800}
-              max={new Date().getFullYear()}
-              value={fromYearInput}
-              onChange={(e) => setFromYearInput(e.target.value)}
-              onBlur={() => commitYear('startYear', fromYearInput)}
-              onKeyDown={(e) => { if (e.key === 'Enter') commitYear('startYear', fromYearInput); }}
-            />
-          </div>
-          <div>
-            <Label htmlFor="to" className="text-xs">To</Label>
-            <Input
-              id="to"
-              type="number"
-              min={1800}
-              max={new Date().getFullYear()}
-              value={toYearInput}
-              onChange={(e) => setToYearInput(e.target.value)}
-              onBlur={() => commitYear('endYear', toYearInput)}
-              onKeyDown={(e) => { if (e.key === 'Enter') commitYear('endYear', toYearInput); }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Measurement search (moved above Measures) */}
-      <div className="mb-3 relative">
-        <Label className="text-xs">Search measurements</Label>
-        <Input
-          placeholder="Search by name..."
-          value={measureSearch}
-          onChange={(e) => { setMeasureSearch(e.target.value); setShowSuggestions(true); }}
-          onFocus={() => setShowSuggestions(true)}
-          onKeyDown={onMeasureSearchKeyDown}
-        />
-        {showSuggestions && filteredSuggestions.length > 0 && (
-          <div className="absolute z-10 mt-1 w-full max-h-64 overflow-auto rounded-md border border-border bg-popover shadow">
-            <ul className="divide-y divide-border">
-              {filteredSuggestions.map((s, idx) => (
-                <li key={`${s.dataset}-${s.code}-${idx}`}>
-                  <button
-                    type="button"
-                    className="w-full text-left px-3 py-2 hover:bg-muted flex items-start gap-2"
-                    onClick={() => selectSuggestion(s)}
-                  >
-                    <span className="text-xs rounded px-1 py-0.5 border border-border">
-                      {s.dataset === 'vdem' ? 'V-Dem' : 'IMF'}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="text-sm truncate">{s.label}</div>
-                      {s.dataset === 'vdem' && (
-                        <div className="text-[10px] text-muted-foreground truncate">{s.cat} • {s.sub}</div>
-                      )}
-                      {s.dataset === 'imf' && (
-                        <div className="text-[10px] text-muted-foreground truncate">
-                          {s.imfCat === 'imf-weo' ? 'World Economic Outlook (WEO)' : 'National Economic Accounts (NEA)'}
-                        </div>
-                      )}
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-
-      {/* Measures: selected pills and tree */}
-      <div className="space-y-2">
-        <Label className="text-xs">Measures</Label>
-        {/* Selected measures as removable buttons */}
-        {selectedMeasures.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {selectedMeasures.map((code) => {
-              const label = getVariableName(code) ?? IMF_WEO_CODE_TO_DESC[code] ?? IMF_NEA_CODE_TO_DESC[code] ?? code;
-              return (
-                <button
-                  key={code}
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
-                  onClick={() => revealMeasure(code, label)}
-                  title={label}
-                >
-                  <span>{label}</span>
-                  <X className="h-3 w-3" onClick={(e) => { e.stopPropagation(); removeMeasure(code); }} />
-                </button>
-              );
-            })}
-          </div>
-        )}
+  {/* Selected measures: pills removed; removal now via chart remove buttons */}
 
         <div
           className="rounded-md border border-border p-1"
@@ -786,7 +715,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
             aria-expanded={expandedDatasets.has(VDEM_DATASET_KEY)}
             onFocus={() => setFocusedKey(VDEM_DATASET_KEY)}
           >
-            {expandedDatasets.has(VDEM_DATASET_KEY) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            {expandedDatasets.has(VDEM_DATASET_KEY) ? <ChevronDown className="h-4 w-4 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 flex-shrink-0" />}
             <span>V-Dem Dataset</span>
           </button>
 
@@ -806,7 +735,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                       aria-expanded={expanded}
                       onFocus={() => setFocusedKey(`cat::${cat}`)}
                     >
-                      {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      {expanded ? <ChevronDown className="h-4 w-4 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 flex-shrink-0" />}
                       <span>{cat}</span>
                     </button>
                     {expanded && (
@@ -830,7 +759,7 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                                 aria-expanded={subExpanded}
                                 onFocus={() => setFocusedKey(`sub::${subKey}`)}
                               >
-                                {subExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                {subExpanded ? <ChevronDown className="h-4 w-4 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 flex-shrink-0" />}
                                 <span>{sub}</span>
                               </button>
                               {subExpanded && (
@@ -889,17 +818,18 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
             aria-expanded={expandedDatasets.has(IMF_DATASET_KEY)}
             onFocus={() => setFocusedKey(IMF_DATASET_KEY)}
           >
-            {expandedDatasets.has(IMF_DATASET_KEY) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            {expandedDatasets.has(IMF_DATASET_KEY) ? <ChevronDown className="h-4 w-4 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 flex-shrink-0" />}
             <span>IMF Dataset</span>
           </button>
 
           {expandedDatasets.has(IMF_DATASET_KEY) && (
             <div className="py-1">
-              {/* NEA: flat list (no submenus) */}
+              {/* NEA: grouped with submenus */}
               {(() => {
                 const catKey = 'imf-nea';
                 const expanded = expandedImfCategories.has(catKey);
                 const catRowKey = `imfcat::${catKey}`;
+                const groups = NEA_GROUPS as Record<string, string[]>;
                 return (
                   <div key={catKey}>
                     <button
@@ -916,74 +846,8 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                       aria-expanded={expanded}
                       onFocus={() => setFocusedKey(catRowKey)}
                     >
-                      {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      {expanded ? <ChevronDown className="h-4 w-4 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 flex-shrink-0" />}
                       <span>National Economic Accounts (NEA)</span>
-                    </button>
-                    {expanded && (
-                      <div className="py-1">
-                        {Object.entries(NEA_GROUPS as Record<string, string>).map(([label, code]) => {
-                          const isActive = selectedMeasures.includes(code);
-                          const inputId = `imf-nea-${code}`;
-                          return (
-                            <label
-                              key={code}
-                              id={`measure-${code}`}
-                              ref={(node) => { measureRefs.current[code] = node; rowRefs.current[`imfvar::${code}`] = node; }}
-                              htmlFor={inputId}
-                              className="flex items-center gap-2 pr-3 pl-10 py-1.5 text-sm cursor-pointer hover:bg-muted rounded"
-                              tabIndex={focusedKey === `imfvar::${code}` ? 0 : -1}
-                              role="treeitem"
-                              aria-level={3}
-                              onFocus={() => setFocusedKey(`imfvar::${code}`)}
-                            >
-                              <Checkbox
-                                id={inputId}
-                                checked={isActive}
-                                onCheckedChange={() => {
-                                  const currentVars = currentQuery.variables ?? [];
-                                  const already = currentVars.includes(code);
-                                  const nextVars = already
-                                    ? currentVars.filter(v => v !== code)
-                                    : (currentVars.length < 4 ? [...currentVars, code] : (notify.error('Maximum of 4 measures allowed'), currentVars));
-                                  if (nextVars !== currentVars) {
-                                    onQueryChange({ ...currentQuery, variables: nextVars, variable: nextVars[0] });
-                                  }
-                                }}
-                              />
-                              <span>{label}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* WEO: grouped with submenus */}
-              {(() => {
-                const catKey = 'imf-weo';
-                const expanded = expandedImfCategories.has(catKey);
-                const catRowKey = `imfcat::${catKey}`;
-                const groups = WEO_GROUPS as Record<string, string[]>;
-                return (
-                  <div key={catKey}>
-                    <button
-                      onClick={() => {
-                        const next = new Set(expandedImfCategories);
-                        if (next.has(catKey)) next.delete(catKey); else next.add(catKey);
-                        setExpandedImfCategories(next);
-                      }}
-                      className="w-full flex items-center gap-2 text-left pr-3 pl-6 py-2 text-sm hover:bg-muted"
-                      ref={(el) => { rowRefs.current[catRowKey] = el; }}
-                      tabIndex={focusedKey === catRowKey ? 0 : -1}
-                      role="treeitem"
-                      aria-level={2}
-                      aria-expanded={expanded}
-                      onFocus={() => setFocusedKey(catRowKey)}
-                    >
-                      {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      <span>World Economic Outlook (WEO)</span>
                     </button>
                     {expanded && (
                       <div className="py-1">
@@ -1006,15 +870,15 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                                 aria-expanded={groupExpanded}
                                 onFocus={() => setFocusedKey(`imfgroup::${groupKey}`)}
                               >
-                                {groupExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                {groupExpanded ? <ChevronDown className="h-4 w-4 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 flex-shrink-0" />}
                                 <span>{groupLabel}</span>
                               </button>
                               {groupExpanded && (
                                 <div className="py-1">
                                   {codes.map((code) => {
                                     const isActive = selectedMeasures.includes(code);
-                                    const inputId = `imf-code-${code}`;
-                                    const desc = IMF_WEO_CODE_TO_DESC[code] || IMF_NEA_CODE_TO_DESC[code] || code;
+                                    const inputId = `imf-nea-${code}`;
+                                    const desc = IMF_NEA_CODE_TO_DESC[code] || code;
                                     return (
                                       <label
                                         key={code}
@@ -1033,15 +897,14 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                                           onCheckedChange={() => {
                                             const currentVars = currentQuery.variables ?? [];
                                             const already = currentVars.includes(code);
-                                            const nextVars = already
-                                              ? currentVars.filter(v => v !== code)
-                                              : (currentVars.length < 4 ? [...currentVars, code] : (notify.error('Maximum of 4 measures allowed'), currentVars));
+                                            const nextVars = already ? currentVars.filter(v => v !== code) : [...currentVars, code];
                                             if (nextVars !== currentVars) {
                                               onQueryChange({ ...currentQuery, variables: nextVars, variable: nextVars[0] });
+                                              setImfOrigin(code, 'nea');
                                             }
                                           }}
                                         />
-                                        <span>{desc}</span>
+                                        <span>{desc}{formatImfSuffix(code)}</span>
                                       </label>
                                     );
                                   })}
@@ -1055,10 +918,188 @@ export function ChartSidebar({ currentQuery, onQueryChange }: ChartSidebarProps)
                   </div>
                 );
               })()}
+
+              {/* WEO: flat list (no submenus) */}
+              {(() => {
+                const catKey = 'imf-weo';
+                const expanded = expandedImfCategories.has(catKey);
+                const catRowKey = `imfcat::${catKey}`;
+                const entries = WEO_FLAT_LIST;
+                return (
+                  <div key={catKey}>
+                    <button
+                      onClick={() => {
+                        const next = new Set(expandedImfCategories);
+                        if (next.has(catKey)) next.delete(catKey); else next.add(catKey);
+                        setExpandedImfCategories(next);
+                      }}
+                      className="w-full flex items-center gap-2 text-left pr-3 pl-6 py-2 text-sm hover:bg-muted"
+                      ref={(el) => { rowRefs.current[catRowKey] = el; }}
+                      tabIndex={focusedKey === catRowKey ? 0 : -1}
+                      role="treeitem"
+                      aria-level={2}
+                      aria-expanded={expanded}
+                      onFocus={() => setFocusedKey(catRowKey)}
+                    >
+                      {expanded ? <ChevronDown className="h-4 w-4 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 flex-shrink-0" />}
+                      <span>World Economic Outlook (WEO)</span>
+                    </button>
+                    {expanded && (
+                      <div className="py-1">
+                        {entries.map(([label, code]) => {
+                          const isActive = selectedMeasures.includes(code);
+                          const inputId = `imf-weo-${code}`;
+                          const desc = IMF_WEO_CODE_TO_DESC[code] || label;
+                          return (
+                            <label
+                              key={code}
+                              id={`measure-${code}`}
+                              ref={(node) => { measureRefs.current[code] = node; rowRefs.current[`imfvar::${code}`] = node; }}
+                              htmlFor={inputId}
+                              className="flex items-center gap-2 pr-3 pl-10 py-1.5 text-sm cursor-pointer hover:bg-muted rounded"
+                              tabIndex={focusedKey === `imfvar::${code}` ? 0 : -1}
+                              role="treeitem"
+                              aria-level={3}
+                              onFocus={() => setFocusedKey(`imfvar::${code}`)}
+                            >
+                              <Checkbox
+                                id={inputId}
+                                checked={isActive}
+                                onCheckedChange={() => {
+                                  const currentVars = currentQuery.variables ?? [];
+                                  const already = currentVars.includes(code);
+                                  const nextVars = already ? currentVars.filter(v => v !== code) : [...currentVars, code];
+                                  if (nextVars !== currentVars) {
+                                    onQueryChange({ ...currentQuery, variables: nextVars, variable: nextVars[0] });
+                                    setImfOrigin(code, 'weo');
+                                  }
+                                }}
+                              />
+                              <span>{desc}{formatImfSuffix(code)}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
       </div>
+  {/* Selected countries as removable buttons */}
+      <div className="mb-2">
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-sm font-medium">Selected countries</div>
+          <button
+            type="button"
+            aria-expanded={!countriesCollapsed}
+            onClick={() => setCountriesCollapsed((s) => !s)}
+            className="text-xs text-muted-foreground"
+          >
+            {countriesCollapsed ? 'Show Countries' : 'Hide Countries'}
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2 mb-2">
+          {currentQuery.countries.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No countries selected</div>
+          ) : (
+            currentQuery.countries.map((id) => {
+              const c = COUNTRIES.find(c => c.id === id);
+              return (
+                <div key={id} className="inline-flex items-center gap-2 rounded-md border border-border px-2 py-1 text-xs bg-card">
+                  <span>{c?.name || id}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeCountry(id)}
+                    aria-label={`Remove ${c?.name || id}`}
+                    className="ml-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+  {/* Countries (label removed) */}
+        {!countriesCollapsed && (
+          <>
+            <Input
+              placeholder="Search countries..."
+              value={countrySearch}
+              onChange={(e) => setCountrySearch(e.target.value)}
+            />
+            <div className="mt-1 max-h-40 overflow-auto rounded-md border border-border p-2">
+              {filteredCountries.map((c) => (
+                <div key={c.id} className="flex items-center gap-2 py-1">
+                  <Checkbox
+                    id={`country-${c.id}`}
+                    checked={currentQuery.countries.includes(c.id)}
+                    onCheckedChange={() => toggleCountry(c.id)}
+                  />
+                  <label htmlFor={`country-${c.id}`} className="text-sm cursor-pointer">
+                    {c.name}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+  {/* Time Period (label removed) */}
+  <div className="space-y-2 mb-4">
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label htmlFor="from" className="text-xs">From</Label>
+            <Input
+              id="from"
+              type="number"
+              min={1800}
+              max={new Date().getFullYear()}
+              value={fromYearInput}
+              onChange={(e) => setFromYearInput(e.target.value)}
+              onBlur={() => commitYear('startYear', fromYearInput)}
+              onKeyDown={(e) => { if (e.key === 'Enter') commitYear('startYear', fromYearInput); }}
+            />
+          </div>
+          <div>
+            <Label htmlFor="to" className="text-xs">To</Label>
+            <Input
+              id="to"
+              type="number"
+              min={1800}
+              max={new Date().getFullYear()}
+              value={toYearInput}
+              onChange={(e) => setToYearInput(e.target.value)}
+              onBlur={() => commitYear('endYear', toYearInput)}
+              onKeyDown={(e) => { if (e.key === 'Enter') commitYear('endYear', toYearInput); }}
+            />
+          </div>
+        </div>
+        {explainControls && (
+          <div className="flex items-center gap-2 pt-2">
+            {explainControls}
+            <UiTooltip>
+              <TooltipTrigger asChild>
+                <button aria-label="Explain correlations help" className="focus:outline-none">
+                  <HelpIcon />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <div className="max-w-xs">
+                  Choose two charts by clicking their cards. Then click "Explain Correlations" to generate short explanations comparing their relationship for your selected countries.
+                </div>
+              </TooltipContent>
+            </UiTooltip>
+          </div>
+        )}
+      </div>
+
+      
     </div>
   );
 }

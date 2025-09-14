@@ -4,7 +4,11 @@ import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 're
 import { useSearchParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Download, Link2, Filter, X, ChevronDown } from 'lucide-react';
+import { Tooltip as UiTooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import HelpIcon from '@/components/ui/help-icon';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import ChartSidebar from '@/components/ChartSidebar';
 import { fetchVDemData, VDemDataPoint } from '@/lib/data';
 import { getVariableById } from '@/lib/variables';
@@ -32,25 +36,32 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
   const [explainError, setExplainError] = useState<string | null>(null);
   const [explainExpanded, setExplainExpanded] = useState(false);
   const [explainTimestamp, setExplainTimestamp] = useState<Date | null>(null);
-  const [explanationText, setExplanationText] = useState<string | null>(null);
+  // Multiple explanations by country
+  const [explanationsByCountry, setExplanationsByCountry] = useState<Record<string, string> | null>(null);
   const [showExplainOverlay, setShowExplainOverlay] = useState(false);
-  // Measured square cell size for the 2x2 grid so all 4 fit without scroll
+  // Picker for choosing up to 3 countries when more than 3 are selected
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [pickerCountries, setPickerCountries] = useState<string[]>([]);
+  // Grid container ref (for potential future use)
   const gridRef = useRef<HTMLDivElement | null>(null);
-  const [cellSize, setCellSize] = useState<number | null>(null);
-  const [rowCount, setRowCount] = useState<number>(1);
-  const [layoutReady, setLayoutReady] = useState<boolean>(false);
   // Refs for FLIP animations (smooth reflow when layout/selection changes)
   const tileRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const prevRectsRef = useRef<Record<string, DOMRect>>({});
   // Controlled animation key so lines draw from left to right right after data loads
   const [animateKey, setAnimateKey] = useState<number>(0);
 
+  // Ref to receive revealMeasure from the sidebar
+  const sidebarRevealRef = useRef<((code: string, displayLabel?: string) => void) | null>(null);
+  const registerReveal = (fn: ((code: string, displayLabel?: string) => void) | null) => {
+    sidebarRevealRef.current = fn;
+  };
+
   // Load chart data
   useEffect(() => {
     let cancelled = false;
     const loadData = async () => {
       const vars = (currentQuery.variables && currentQuery.variables.length > 0)
-        ? currentQuery.variables.slice(0, 4)
+        ? currentQuery.variables
         : (currentQuery.variable ? [currentQuery.variable] : []);
       if (vars.length === 0) {
         setDataByVar({});
@@ -128,9 +139,9 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
     setSearchParams(params);
   };
 
-  // Selected variables (up to 4)
+  // Selected variables (unlimited)
   const selectedVars = (currentQuery.variables && currentQuery.variables.length > 0)
-    ? currentQuery.variables.slice(0, 4)
+    ? currentQuery.variables
     : (currentQuery.variable ? [currentQuery.variable] : []);
 
   // Decide dataset category ordering and build unifiedVars list
@@ -148,42 +159,12 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
   const vdemVars = selectedVars.filter(isVdemVar);
   const imfVars = selectedVars.filter(isImfVar);
   const otherVars = selectedVars.filter(v => !vdemVars.includes(v) && !imfVars.includes(v));
-  const unifiedVars = [...vdemVars, ...imfVars, ...otherVars].slice(0, 4);
+  const unifiedVars = useMemo(() => [...vdemVars, ...imfVars, ...otherVars], [vdemVars, imfVars, otherVars]);
+  // No measured grid; we use fixed auto-rows and vertical scroll for unlimited charts
 
-  // Measure available grid area and compute per-row tile height based on count
-  useEffect(() => {
-    const el = gridRef.current;
-    if (!el) return;
-    let raf = 0;
-    const last = { w: 0, h: 0, rows: 0, cell: 0 };
-    const computeMeasured = () => {
-      const width = el.clientWidth;
-      const height = el.clientHeight; // excludes header via flex layout
-      const gap = 12; // px (gap-3)
-      const count = unifiedVars.length;
-      const desktop = width >= 640;
-      const cols = desktop ? (count === 1 ? 1 : 2) : 1;
-      const rows = Math.max(1, Math.ceil(count / cols));
-      const FUDGE = 20; // padding/borders/ring allowance
-      const rowHeight = Math.max(0, Math.floor((height - gap * (rows - 1)) / rows) - FUDGE);
-      // Avoid tiny oscillations and redundant state updates
-      const changed = (rows !== last.rows) || (Math.abs(rowHeight - last.cell) > 1) || (Math.abs(width - last.w) > 1) || (Math.abs(height - last.h) > 1);
-      if (changed) {
-        last.w = width; last.h = height; last.rows = rows; last.cell = rowHeight;
-        setRowCount(rows);
-        setCellSize(rowHeight);
-        setLayoutReady(true);
-      }
-    };
-    const schedule = () => {
-      if (raf) cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(computeMeasured);
-    };
-    const ro = new ResizeObserver(schedule);
-    ro.observe(el);
-    schedule();
-    return () => { ro.disconnect(); if (raf) cancelAnimationFrame(raf); };
-  }, [gridRef, unifiedVars.length]);
+  // Explanation entries helper (used to control overlay layout)
+  const explainEntries = explanationsByCountry ? Object.entries(explanationsByCountry) : [];
+  const explainCount = explainEntries.length;
 
   // FLIP: measure before/after and animate movement without remounting
   useLayoutEffect(() => {
@@ -203,24 +184,20 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
       if (dx !== 0 || dy !== 0) {
         const el = nodes[key]!;
         el.style.willChange = 'transform';
-        el.style.transform = `translate(${dx}px, ${dy}px)`;
+              el.style.transform = `translate(${dx}px, ${dy}px)`;
         // Force reflow
   // Force reflow to apply the initial transform before transitioning back to identity
   // eslint-disable-next-line @typescript-eslint/no-unused-expressions
   el.offsetWidth;
-        el.style.transition = 'transform 250ms ease, height 250ms ease, width 250ms ease';
-        el.style.transform = '';
-        const cleanup = () => {
-          el.style.transition = '';
-          el.style.willChange = '';
-          el.removeEventListener('transitionend', cleanup);
-        };
-        el.addEventListener('transitionend', cleanup);
+  // Remove applying an inline transition here so layout shifts don't animate.
+  // We still clear transform and willChange immediately so elements snap to their new place.
+  el.style.transform = '';
+  el.style.willChange = '';
       }
     });
     // Store for next cycle
     prevRectsRef.current = currentRects;
-  }, [unifiedVars, rowCount, cellSize]);
+  }, [unifiedVars]);
 
   // DEBUG: Show selectedVars for troubleshooting
   // Remove this after confirming multi-chart works
@@ -264,6 +241,123 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
     return nodes;
   }
 
+  // Helper to turn LLM text into React nodes (same as single explanation, reused per country)
+  function renderExplanationText(text: string): React.ReactNode {
+    const lines = text.split('\n');
+    const blocks: React.ReactNode[] = [];
+    let i = 0; let key = 0;
+
+    // Accept headings in multiple forms:
+    // - **Summary:** (existing)
+    // - Summary / Why it matters / Drivers/Context / Caveats (case-insensitive, optional colon)
+    const boldHeadingRegex = /^\s*\*\*(.+?):\*\*\s*$/;
+    const canonicalHeaders = new Set([
+      'summary',
+      'why it matters',
+      'drivers/context',
+      'drivers / context',
+      'drivers- context',
+      'drivers - context',
+      'context',
+      'caveats',
+    ]);
+    const isPlainHeader = (raw: string) => {
+      const t = raw.trim().replace(/\s{2,}$/g, ''); // drop trailing spaces used for markdown breaks
+      // Allow optional trailing colon
+      const noColon = t.replace(/:$/, '').toLowerCase();
+      return canonicalHeaders.has(noColon);
+    };
+
+    while (i < lines.length) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // Bold markdown heading (e.g., **Summary:**)
+      const boldHeadingMatch = boldHeadingRegex.exec(trimmed);
+      if (boldHeadingMatch) {
+        blocks.push(
+          <h4 key={key++} className="text-base font-semibold mt-3 mb-1.5">{boldHeadingMatch[1]}</h4>
+        );
+        i++;
+        continue;
+      }
+
+      // Plain text heading lines from provided examples (e.g., "Summary")
+      if (isPlainHeader(trimmed)) {
+        // Normalize display text (capitalize first letter of each word and keep slash spacing)
+        const display = trimmed.replace(/:$/, '');
+        blocks.push(
+          <h4 key={key++} className="text-base font-semibold mt-3 mb-1.5">{display}</h4>
+        );
+        i++;
+        continue;
+      }
+
+      // Bulleted list grouping
+      if (trimmed.startsWith('- ')) {
+        const items: string[] = [];
+        while (i < lines.length && lines[i].trim().startsWith('- ')) {
+          items.push(lines[i].trim().slice(2));
+          i++;
+        }
+        const listKey = key++;
+        blocks.push(
+          <ul key={listKey} className="list-disc ml-5 my-2 space-y-1">
+            {items.map((it, idx) => (<li key={idx}>{renderInline(it)}</li>))}
+          </ul>
+        );
+        continue;
+      }
+
+      // Blank line spacing
+      if (trimmed.length === 0) {
+        blocks.push(<div key={key++} className="h-2" />);
+        i++;
+        continue;
+      }
+
+      // Paragraph
+      blocks.push(<p key={key++} className="mb-2">{renderInline(line)}</p>);
+      i++;
+    }
+    return <article>{blocks}</article>;
+  }
+
+  async function runExplainForCountries(countries: string[]) {
+    if (selectedForExplain.length !== 2 || countries.length === 0) return;
+    const [indexA, indexB] = selectedForExplain;
+    setExplaining(true);
+    setExplainError(null);
+    setExplanationsByCountry(null);
+    try {
+      const results = await Promise.allSettled(
+        countries.map(async (country) => {
+          const res = await apiService.explainRelationships({ indexA, indexB, country, execute: true });
+          const text = typeof res?.explanation === 'string' ? res.explanation.trim() : '';
+          return { country, text };
+        })
+      );
+      const map: Record<string, string> = {};
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled') {
+          const { country, text } = r.value as { country: string; text: string };
+          map[country] = text || `No explanation returned. Requested: ${indexA} vs ${indexB} for ${country}.`;
+        } else {
+          const country = countries[idx];
+          const reason = (r as PromiseRejectedResult).reason as unknown;
+          const msg = reason && typeof (reason as { message?: unknown }).message === 'string' ? (reason as { message: string }).message : String(reason ?? 'Failed');
+          map[country] = /\b404\b/.test(msg) ? 'No correlation was found.' : (msg || 'Failed to fetch explanation');
+        }
+      });
+      setExplanationsByCountry(map);
+      setExplainTimestamp(new Date());
+      setExplainExpanded(false);
+      setShowExplainOverlay(true);
+    } finally {
+      setExplaining(false);
+    }
+  }
+
   const handleDownloadCSVFor = (variableCode: string, rows: ChartRow[]) => {
     if (!rows || rows.length === 0) return;
     const csvHeaders = ['Year', ...currentQuery.countries.map(id => getCountryById(id)?.name || id)];
@@ -293,6 +387,25 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
     });
   };
 
+  // Remove a variable/chart from the selection
+  const removeChart = (v: string) => {
+    // Also unselect from explain selection if present
+    setSelectedForExplain(prev => prev.filter(x => x !== v));
+    const vars = (currentQuery.variables && currentQuery.variables.length > 0)
+      ? currentQuery.variables
+      : (currentQuery.variable ? [currentQuery.variable] : []);
+    const nextVars = vars.filter(x => x !== v);
+    const next: QueryState = { ...currentQuery };
+    if (nextVars.length > 0) {
+      next.variables = nextVars;
+      next.variable = nextVars[0];
+    } else {
+      next.variables = undefined;
+      next.variable = undefined;
+    }
+    handleQueryUpdate(next);
+  };
+
   // (moved up) Helper classification and unifiedVars construction
 
   // Renderer for a single chart card (kept identical to previous rendering for behavior parity)
@@ -306,7 +419,31 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
       v;
     const variableScale = variableMeta?.scale ?? '';
     const variableUnit = variableMeta?.unit;
+    // Append WEO/IMF suffix for chart titles when applicable
+    const formatImfSuffixLocal = (code: string) => {
+      if (!code) return '';
+      const parts = code.split('.').map(p => p.toUpperCase());
+      const hasV = parts.includes('V');
+      const hasQ = parts.includes('Q');
+      const hasXDC = parts.includes('XDC');
+      const hasUSD = parts.includes('USD');
+      const hasPD = parts.includes('PD');
+      const hasIX = parts.includes('IX');
+      const pieces: string[] = [];
+      if (hasV && hasXDC) pieces.push('Current prices in domestic currency');
+      else if (hasV && hasUSD) pieces.push('Current prices in US dollar');
+      else if (hasQ && hasXDC) pieces.push('Constant prices in domestic currency');
+      else if (hasQ && hasUSD) pieces.push('Constant prices in US dollar');
+      if (hasPD || hasIX) pieces.push('Price-deflator / index');
+      if (pieces.length === 0) return '';
+      return ` — ${pieces.join(', ')}`;
+    };
+    const variableLabelWithSuffix = variableLabel + (isImfVar(v) ? formatImfSuffixLocal(v) : '');
   const rows = chartDataByVar[v] || [];
+    // Unique clipPath id to reveal line from left->right; include animateKey to retrigger on data refresh
+    const safeVarId = v.replace(/[^a-zA-Z0-9_-]/g, '-');
+  const clipId = `reveal-${safeVarId}-${animateKey}`;
+  const drawAnimName = `draw-${safeVarId}-${animateKey}`;
     const selected = selectedForExplain.includes(v);
     return (
       <div
@@ -322,10 +459,28 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
           });
         }}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedForExplain(prev => prev.includes(v) ? prev.filter(x => x !== v) : (prev.length >= 2 ? [prev[1], v] : [...prev, v])); } }}
-  className={`bg-card border rounded-xl p-2 sm:p-3 box-border mx-auto w-full h-full flex flex-col transition-colors ${selected ? 'border-green-500 ring-2 ring-inset ring-green-500' : 'border-border hover:border-muted'}`}
+  className={`relative bg-card border rounded-xl p-2 sm:p-3 box-border mx-auto w-full h-full flex flex-col ${selected ? 'border-success-green ring-2 ring-inset ring-success-green/50' : 'border-border hover:border-muted'}`}
       >
+        {/* Remove chart button */}
+        <button
+          type="button"
+          aria-label="Remove chart"
+          title="Remove chart"
+          onClick={(e) => { e.stopPropagation(); removeChart(v); }}
+          className="absolute top-2 right-2 inline-flex items-center justify-center h-7 w-7 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+        >
+          <X className="h-4 w-4" />
+        </button>
         <div className="mb-1.5 shrink-0">
-          <h2 className="text-base font-semibold">{variableLabel}</h2>
+          <h2 className="text-base font-semibold">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); sidebarRevealRef.current?.(v, variableLabel); }}
+              className="text-left w-full text-base font-semibold p-0 m-0"
+            >
+              {variableLabelWithSuffix}
+            </button>
+          </h2>
           {variableScale && (
             <p className="text-muted-foreground text-xs">{variableScale}</p>
           )}
@@ -339,20 +494,77 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
           <div className="flex-1 min-h-0">
               <ResponsiveContainer width="100%" height="100%">
             <LineChart data={rows}>
+              <defs>
+                {/* CSS keyframes injected into SVG for reliable stroke-dashoffset animation */}
+                <style>{`
+                  @keyframes ${drawAnimName} { to { stroke-dashoffset: 0; } }
+                `}</style>
+                {/* Dots fade-in after the line draw completes */}
+                <style>{`
+                  @keyframes dots-${safeVarId}-${animateKey} { to { opacity: 1; } }
+                `}</style>
+                <clipPath id={clipId} clipPathUnits="objectBoundingBox">
+                  <rect x="0" y="0" width="100%" height="100%" />
+                </clipPath>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis 
                 dataKey="year" 
                 stroke="hsl(var(--muted-foreground))"
               />
-              <YAxis 
-                stroke="hsl(var(--muted-foreground))"
-                tickFormatter={(value) => {
-                  if (value === null) return 'N/A';
-                  if (variableUnit === '%') return `${(value as number).toFixed(1)}%`;
-                  if ((variableScale || '').includes('0-1')) return (value as number).toFixed(3);
-                  return (value as number).toFixed(2);
-                }}
-              />
+              {/* Compute Y axis domain to ensure negative values are visible and ranges have padding */}
+              {(() => {
+                const allValues: number[] = [];
+                for (const row of rows) {
+                  for (const cid of currentQuery.countries) {
+                    const v = row[cid] as number | null | undefined;
+                    if (v !== null && v !== undefined && !Number.isNaN(v)) allValues.push(v);
+                  }
+                }
+                if (allValues.length === 0) {
+                  return (
+                    <YAxis 
+                      stroke="hsl(var(--muted-foreground))"
+                      tickFormatter={(value) => {
+                        if (value === null) return 'N/A';
+                        if (variableUnit === '%') return `${(value as number).toFixed(1)}%`;
+                        if ((variableScale || '').includes('0-1')) return (value as number).toFixed(3);
+                        return (value as number).toFixed(2);
+                      }}
+                    />
+                  );
+                }
+
+                const dataMin = Math.min(...allValues);
+                const dataMax = Math.max(...allValues);
+                let pad = (dataMax - dataMin) * 0.08;
+                if (!Number.isFinite(pad) || pad === 0) pad = Math.abs(dataMin) * 0.08 || Math.abs(dataMax) * 0.08 || 1;
+                let minDomain = dataMin - pad;
+                let maxDomain = dataMax + pad;
+                // If the data is all positive, allow min to be 0 for visual grounding, unless negative values exist
+                if (dataMin >= 0 && minDomain > 0) minDomain = 0;
+                // If the data is all negative, allow max to be 0 for grounding
+                if (dataMax <= 0 && maxDomain < 0) maxDomain = 0;
+
+                // Avoid degenerate domain
+                if (Math.abs(maxDomain - minDomain) < 1e-6) {
+                  minDomain = minDomain - 1;
+                  maxDomain = maxDomain + 1;
+                }
+
+                return (
+                  <YAxis 
+                    stroke="hsl(var(--muted-foreground))"
+                    domain={[minDomain, maxDomain]}
+                    tickFormatter={(value) => {
+                      if (value === null) return 'N/A';
+                      if (variableUnit === '%') return `${(value as number).toFixed(1)}%`;
+                      if ((variableScale || '').includes('0-1')) return (value as number).toFixed(3);
+                      return (value as number).toFixed(2);
+                    }}
+                  />
+                );
+              })()}
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: 'hsl(var(--card))',
@@ -369,7 +581,7 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
                   });
                   return (
                     <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
-                      <p className="font-medium mb-2">{`${variableLabel} — Year: ${label}`}</p>
+                      <p className="font-medium mb-2">{`${variableLabelWithSuffix} — Year: ${label}`}</p>
                       {sortedPayload.map((entry, index) => {
                         const country = getCountryById(entry.dataKey as string);
                         return (
@@ -389,23 +601,35 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
                 }}
               />
               <Legend />
-      {currentQuery.countries.map((countryId, index) => {
+    {currentQuery.countries.map((countryId, index) => {
                 const country = getCountryById(countryId);
-                return (
-                    <Line
+        // line drawing duration (s) — keep in sync with CSS animation below
+        const lineDrawDuration = 0.9;
+        const dotsAnimName = `dots-${safeVarId}-${animateKey}`;
+        return (
+          <Line
                     key={countryId}
                     type="monotone"
                     dataKey={countryId}
                     stroke={getCountryColor(index)}
                     strokeWidth={2}
-                    dot={{ r: 4 }}
+          // hide dots initially and animate their opacity after the line draw finishes
+          dot={{ r: 4, strokeWidth: 0, fill: getCountryColor(index) }}
                     name={country?.name}
+        // Use stroke-dashoffset animation for clear left-to-right reveal
+        isAnimationActive={false}
         connectNulls={false}
-        isAnimationActive={!loading}
-        animationBegin={0}
-        animationDuration={800}
-        animationEasing="ease-in-out"
-        animationId={animateKey}
+        pathLength={1}
+        style={{
+          strokeDasharray: 1,
+          strokeDashoffset: 1,
+          animation: `${drawAnimName} 0.9s ease-out forwards`,
+          transition: 'none',
+          opacity: 1,
+        }}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        clipPath={`url(#${clipId})`}
                   />
                 );
               })}
@@ -433,19 +657,16 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
   };
 
   return (
-    <div className="bg-background h-[calc(100vh-64px)] overflow-hidden">
+    <div className="bg-background h-full overflow-hidden">
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_360px] gap-0 p-4 h-full overflow-hidden min-h-0">
         {/* Left: Chart area fills all space up to the sidebar */}
         <div className="pr-0 sm:pr-4 min-h-0 h-full overflow-hidden relative">
-          <div className="flex items-center justify-between mb-3">
-            <div />
-            {/* Mobile-only Filters button */}
-            <div className="sm:hidden">
-              <Button variant="outline" size="sm" onClick={() => setMobileFiltersOpen(true)}>
-                <Filter className="h-4 w-4 mr-2" />
-                Filters
-              </Button>
-            </div>
+          {/* Mobile-only Filters button (only on small screens) */}
+          <div className="flex items-center justify-end mb-3 sm:hidden">
+            <Button variant="outline" size="sm" onClick={() => setMobileFiltersOpen(true)}>
+              <Filter className="h-4 w-4 mr-2" />
+              Filters
+            </Button>
           </div>
 
           {selectedVars.length === 0 ? (
@@ -457,54 +678,20 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
             </div>
           ) : (
             <div className="flex flex-col h-full min-h-0">
-              {/* Explain CTA */}
-              <div className="flex items-center justify-end mb-2 gap-2 shrink-0">
-                {explainError && (
-                  <span className="text-sm text-red-600 mr-auto">{explainError}</span>
-                )}
-                <Button size="sm" variant="default" aria-busy={explaining} disabled={!(selectedForExplain.length === 2 && currentQuery.countries.length > 0) || explaining} onClick={async () => {
-                  if (selectedForExplain.length !== 2 || currentQuery.countries.length === 0) return;
-                  const [indexA, indexB] = selectedForExplain;
-                  const country = currentQuery.countries[0];
-                  setExplaining(true);
-                  setExplainError(null);
-                  setExplanationText(null);
-                  try {
-                    const res = await apiService.explainRelationships({ indexA, indexB, country, execute: true });
-                    const text = typeof res?.explanation === 'string' ? res.explanation.trim() : '';
-                    setExplanationText(text || `No explanation returned. Requested: ${indexA} vs ${indexB} for ${country}.`);
-                    setExplainTimestamp(new Date());
-                    setExplainExpanded(false);
-                    setShowExplainOverlay(true);
-                  } catch (err: unknown) {
-                    setExplainError(err instanceof Error ? err.message : 'Failed to fetch explanation');
-                  } finally {
-                    setExplaining(false);
-                  }
-                }} title={currentQuery.countries[0] ? `Using ${getCountryById(currentQuery.countries[0])?.name || currentQuery.countries[0]}` : 'Select a country to enable'}>
-                  {explaining ? (
-                    <span className="inline-flex items-center gap-2">
-                      <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
-                      Explaining...
-                    </span>
-                  ) : (
-                    'Explain selected'
-                  )}
-                </Button>
-              </div>
-        {/* Grid of charts dynamically sized: 1 = full, 2 = side-by-side, 3-4 = 2x2 */}
+              {/* Explain Correlations button moved into sidebar; no CTA here */}
+              {/* Grid of charts: 1 column on mobile, 2 columns on desktop; vertically scrollable, unlimited charts */}
               <div className="flex-1 min-h-0">
-        <div
+                <div
                   ref={gridRef}
-      className={`grid grid-cols-1 ${unifiedVars.length > 1 ? 'sm:grid-cols-2' : 'sm:grid-cols-1'} gap-3 h-full transition-opacity duration-200 ${layoutReady ? 'opacity-100' : 'opacity-0'}`}
-                  style={cellSize ? { gridTemplateRows: `repeat(${rowCount}, ${cellSize}px)` } : undefined}
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-3 h-full overflow-y-auto min-h-0"
+                  style={{ gridAutoRows: unifiedVars.length === 1 ? '630px' : '420px' }}
                 >
           {unifiedVars.map((v) => (
                     <div
                       key={`cell-${v}`}
                       ref={(el) => { tileRefs.current[v] = el; }}
-                      className="min-h-0 transition-[height,transform] duration-250 ease-out will-change-transform [contain:content]"
-                      style={{ height: cellSize ? `${cellSize}px` : undefined }}
+                      className={`min-h-0 will-change-transform [contain:content] ${unifiedVars.length === 1 ? 'sm:col-span-2' : ''}`}
+                      style={{ height: '100%' }}
                     >
                       {renderChartCard(v)}
                     </div>
@@ -516,49 +703,141 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
 
           {/* Notes moved into each chart panel */}
           {/* Explanation overlay (glass, transparent) anchored to chart area */}
-          {showExplainOverlay && explanationText && (
+          {showExplainOverlay && explanationsByCountry && Object.keys(explanationsByCountry).length > 0 && (
             <div className="absolute inset-0 z-20 flex items-start justify-center p-3 sm:p-6">
               {/* Click outside to close */}
               <div className="absolute inset-0 bg-background/30 backdrop-blur-sm" onClick={() => setShowExplainOverlay(false)} />
-              <div className="relative w-full max-w-3xl mt-4 sm:mt-8 rounded-2xl border border-border/60 bg-background/60 backdrop-blur-md shadow-xl p-4 sm:p-6 text-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>AI response</span>
-                    {explainTimestamp && <span>· {explainTimestamp.toLocaleString()}</span>}
-                  </div>
+              <div className="relative w-full max-w-7xl mt-4 sm:mt-8 text-sm">
+                <div className="flex items-center justify-end mb-2">
                   <Button size="sm" variant="outline" onClick={() => setShowExplainOverlay(false)}>Close</Button>
                 </div>
-                <div className="max-h-[60vh] overflow-auto leading-relaxed">
-                  {(() => {
-                    const lines = explanationText.split('\n');
-                    const blocks: React.ReactNode[] = [];
-                    let i = 0; let key = 0;
-                    const headingRegex = /^\s*\*\*(.+?):\*\*\s*$/;
-                    while (i < lines.length) {
-                      const line = lines[i];
-                      const headingMatch = headingRegex.exec(line.trim());
-                      if (headingMatch) { blocks.push(<h4 key={key++} className="text-base font-semibold mt-3 mb-1.5">{headingMatch[1]}</h4>); i++; continue; }
-                      if (line.trim().startsWith('- ')) {
-                        const items: string[] = [];
-                        while (i < lines.length && lines[i].trim().startsWith('- ')) { items.push(lines[i].trim().slice(2)); i++; }
-                        const listKey = key++;
-                        blocks.push(<ul key={listKey} className="list-disc ml-5 my-2 space-y-1">{items.map((it, idx) => (<li key={idx}>{renderInline(it)}</li>))}</ul>);
-                        continue;
-                      }
-                      if (line.trim().length === 0) { blocks.push(<div key={key++} className="h-2" />); i++; continue; }
-                      blocks.push(<p key={key++} className="mb-2">{renderInline(line)}</p>);
-                      i++;
-                    }
-                    return <article>{blocks}</article>;
-                  })()}
+                <div className="max-h-[70vh] overflow-auto">
+                  {/* Layout rules:
+                      - 1 explanation: center and constrain width (previous behavior)
+                      - 2 or 3 explanations: use responsive columns so cards share available width side-by-side
+                  */}
+                  {explainCount === 1 ? (
+                    <div className="flex justify-center">
+                      {explainEntries.map(([countryId, text]) => {
+                        const country = getCountryById(countryId);
+                        return (
+                          <div key={countryId} className="w-full sm:w-3/4 lg:w-2/3 rounded-2xl border border-border/60 bg-background/70 backdrop-blur-md shadow-2xl p-6 sm:p-7">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span>AI response</span>
+                                {explainTimestamp && <span>· {explainTimestamp.toLocaleString()}</span>}
+                              </div>
+                              <div className="text-base font-semibold text-muted-foreground">{country?.name || countryId}</div>
+                            </div>
+                            <div className="leading-relaxed text-sm">
+                              {renderExplanationText(text)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className={`grid grid-cols-1 sm:grid-cols-${Math.min(explainCount, 3)} gap-6`}>
+                      {explainEntries.map(([countryId, text]) => {
+                        const country = getCountryById(countryId);
+                        return (
+                          <div key={countryId} className="rounded-2xl border border-border/60 bg-background/70 backdrop-blur-md shadow-2xl p-6 sm:p-7">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span>AI response</span>
+                                {explainTimestamp && <span>· {explainTimestamp.toLocaleString()}</span>}
+                              </div>
+                              <div className="text-base font-semibold text-muted-foreground">{country?.name || countryId}</div>
+                            </div>
+                            <div className="leading-relaxed text-sm">
+                              {renderExplanationText(text)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Country picker overlay when more than 3 countries are selected */}
+          {showCountryPicker && (
+            <div className="absolute inset-0 z-30 flex items-start justify-center p-3 sm:p-6">
+              <div className="absolute inset-0 bg-background/40 backdrop-blur-sm" onClick={() => setShowCountryPicker(false)} />
+              <div className="relative w-full max-w-lg mt-10 rounded-2xl border border-border bg-background shadow-xl p-4 sm:p-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-base font-semibold">Pick up to 3 countries</h3>
+                  <Button size="sm" variant="outline" onClick={() => setShowCountryPicker(false)}>Cancel</Button>
+                </div>
+                <div className="max-h-[50vh] overflow-auto space-y-2">
+                  {currentQuery.countries.map((cid) => {
+                    const c = getCountryById(cid);
+                    const checked = pickerCountries.includes(cid);
+                    const disableUnchecked = !checked && pickerCountries.length >= 3;
+                    return (
+                      <label key={cid} className={`flex items-center gap-3 p-2 rounded hover:bg-muted ${disableUnchecked ? 'opacity-60' : ''}`}>
+                        <Checkbox checked={checked} onCheckedChange={(val) => {
+                          const v = Boolean(val);
+                          setPickerCountries((prev) => {
+                            if (v) {
+                              if (prev.includes(cid)) return prev;
+                              if (prev.length >= 3) return prev;
+                              return [...prev, cid];
+                            } else {
+                              return prev.filter(x => x !== cid);
+                            }
+                          });
+                        }} disabled={disableUnchecked} />
+                        <span className="text-sm">{c?.name || cid}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setShowCountryPicker(false)}>Close</Button>
+                  <Button size="sm" disabled={pickerCountries.length === 0} onClick={async () => { setShowCountryPicker(false); await runExplainForCountries(pickerCountries); }}>Explain</Button>
                 </div>
               </div>
             </div>
           )}
         </div>
   {/* Right: Sidebar - fixed width on desktop */}
-  <div id="sidebar-scroll-container" className="hidden sm:block h-full overflow-y-auto min-h-0">
-          <ChartSidebar currentQuery={currentQuery} onQueryChange={handleQueryUpdate} />
+  <div id="desktop-sidebar-scroll" className="hidden sm:block h-full overflow-y-auto min-h-0">
+          <ChartSidebar
+            currentQuery={currentQuery}
+            onQueryChange={handleQueryUpdate}
+            registerReveal={registerReveal}
+            explainControls={
+              <Button
+                size="sm"
+                variant="default"
+                aria-busy={explaining}
+                disabled={!(selectedForExplain.length === 2 && currentQuery.countries.length > 0) || explaining}
+                onClick={async () => {
+                  if (selectedForExplain.length !== 2 || currentQuery.countries.length === 0) return;
+                  const selected = currentQuery.countries;
+                  if (selected.length <= 3) {
+                    await runExplainForCountries(selected);
+                  } else {
+                    setPickerCountries(selected.slice(0, 3));
+                    setShowCountryPicker(true);
+                  }
+                }}
+                title={currentQuery.countries[0] ? `Using ${getCountryById(currentQuery.countries[0])?.name || currentQuery.countries[0]}` : 'Select a country to enable'}
+              >
+                {explaining ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
+                    Explaining...
+                  </span>
+                ) : (
+                  'Explain Correlations'
+                )}
+              </Button>
+            }
+          />
         </div>
       </div>
 
@@ -572,8 +851,40 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
               Close
             </Button>
           </div>
-          <div id="mobile-sidebar-scroll-container" className="flex-1 overflow-y-auto min-h-0">
-            <ChartSidebar currentQuery={currentQuery} onQueryChange={handleQueryUpdate} />
+            <div id="mobile-sidebar-scroll" className="flex-1 overflow-y-auto min-h-0">
+            <ChartSidebar
+              currentQuery={currentQuery}
+              onQueryChange={handleQueryUpdate}
+              registerReveal={registerReveal}
+              explainControls={
+                <Button
+                  size="sm"
+                  variant="default"
+                  aria-busy={explaining}
+                  disabled={!(selectedForExplain.length === 2 && currentQuery.countries.length > 0) || explaining}
+                  onClick={async () => {
+                    if (selectedForExplain.length !== 2 || currentQuery.countries.length === 0) return;
+                    const selected = currentQuery.countries;
+                    if (selected.length <= 3) {
+                      await runExplainForCountries(selected);
+                    } else {
+                      setPickerCountries(selected.slice(0, 3));
+                      setShowCountryPicker(true);
+                    }
+                  }}
+                  title={currentQuery.countries[0] ? `Using ${getCountryById(currentQuery.countries[0])?.name || currentQuery.countries[0]}` : 'Select a country to enable'}
+                >
+                  {explaining ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
+                      Explaining...
+                    </span>
+                  ) : (
+                    'Explain Correlations'
+                  )}
+                </Button>
+              }
+            />
           </div>
         </div>
       )}

@@ -65,7 +65,7 @@ export function Dashboard({ currentQuery, onQueryChange }: DashboardProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background flex items-center justify-center">
+      <div className="min-h-full bg-gradient-to-br from-background via-muted/20 to-background flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading democracy indicators...</p>
@@ -77,18 +77,17 @@ export function Dashboard({ currentQuery, onQueryChange }: DashboardProps) {
   const hasQuery = currentQuery.variable || currentQuery.category;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
+    <div className="min-h-full bg-gradient-to-br from-background via-muted/20 to-background">
       <div className="container mx-auto px-4 py-8">
         
         {/* Hero Section */}
         <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4">
-            <span className="gradient-text">V-Dem Compare</span>
-          </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Compare democracy indicators across countries in seconds. 
-            Explore trends, analyze patterns, and make data-driven insights about democratic development worldwide.
-          </p>
+            <h1 className="text-4xl md:text-5xl font-bold mb-4">
+              <span className="text-black">Democracy Dashboard</span>
+            </h1>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Democracy Dashboard helps you compare governance and societal indicators across countries quickly. Explore trends, surface correlations, and turn complex datasets into clear, shareable charts.
+            </p>
         </div>
 
         {/* Query Status */}
@@ -129,17 +128,15 @@ export function Dashboard({ currentQuery, onQueryChange }: DashboardProps) {
               data={cardData[variable.id] || []}
               countries={effectiveCountries}
               onClick={() => handleCardClick(variable.id)}
+              selected={
+                (currentQuery.variable && currentQuery.variable === variable.id) ||
+                (currentQuery.variables && currentQuery.variables.includes(variable.id))
+              }
             />
           ))}
         </div>
 
-        {/* Data Attribution */}
-        <div className="mt-16 pt-8 border-t border-border text-center">
-          <p className="text-sm text-muted-foreground">
-            Data source: <span className="font-medium">V-Dem Institute, v15</span> • 
-            Built for democratic analysis and comparison
-          </p>
-        </div>
+  {/* Attribution removed per request */}
       </div>
     </div>
   );

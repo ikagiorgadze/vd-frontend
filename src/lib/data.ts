@@ -1,6 +1,7 @@
 import { apiService, ApiQueryRequest, ApiDataPoint } from './api';
 import { getVariableCode, getVariableName } from './variable-codes';
-import { getImfVariableCode, IMF_NEA_CODE_TO_DESC, IMF_CODE_PATTERN } from './imf-codes';
+import { getImfVariableCode, IMF_NEA_CODE_TO_DESC, IMF_CODE_PATTERN, IMF_WEO_CODE_TO_DESC } from './imf-codes';
+import { getImfOrigin } from './imf-origin';
 import { getCountryById } from './countries';
 
 export interface VDemDataPoint {
@@ -34,15 +35,49 @@ function transformApiData(
   const result: VDemDataPoint[] = [];
   
   for (const row of apiData) {
-    // Match incoming API country name to our country slug IDs via name
-    const countryId = countries.find(id => {
+    // Match incoming API country name to our country slug IDs via several fallbacks
+    // Normalize helper: lower-case, NFD decompose and strip diacritics, remove punctuation
+    const normalize = (s?: string | number | null) => {
+      if (!s && s !== 0) return '';
+      const str = String(s);
+      // decompose and remove diacritics
+      const decomposed = str.normalize ? str.normalize('NFD') : str;
+      const removed = decomposed.replace(/[\u0300-\u036f]/g, '');
+      // keep letters/numbers/space
+      return removed.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+    };
+
+    const incoming = normalize(row.country_name);
+
+    let countryId = countries.find(id => {
       const country = getCountryById(id);
-      return country?.name === row.country_name;
+      return normalize(country?.name) === incoming;
     });
-    
-    if (!countryId) continue;
-    
-  const value = (row as unknown as Record<string, unknown>)[variableCode];
+
+    // Try substring matches (e.g., 'United States' vs 'United States of America')
+    if (!countryId && incoming) {
+      countryId = countries.find(id => {
+        const country = getCountryById(id);
+        const n = normalize(country?.name);
+        return n && (incoming.includes(n) || n.includes(incoming));
+      });
+    }
+
+    // Try ISO3 match
+    if (!countryId && incoming) {
+      countryId = countries.find(id => {
+        const country = getCountryById(id);
+        return normalize(country?.iso3) === incoming || normalize(country?.iso3) === normalize(row.country_name);
+      });
+    }
+
+    if (!countryId) {
+      // For debugging, keep a light warning so we can iterate if some IMF names don't match
+      console.debug('transformApiData: unmapped country name from API:', row.country_name);
+      continue;
+    }
+
+    const value = (row as unknown as Record<string, unknown>)[variableCode];
     if (value !== null && value !== undefined) {
       result.push({
         country: countryId,
@@ -153,8 +188,9 @@ export async function fetchVDemData(
     const isImf = IMF_CODE_PATTERN.test(variableCode) && !/^v\d|^e_/i.test(variableCode);
     let apiData: ApiDataPoint[];
     if (isImf) {
-      // Detect NEA vs WEO: NEA codes in our list IMF_NEA_CODE_TO_DESC
-      const isNea = !!IMF_NEA_CODE_TO_DESC[variableCode];
+      // Prefer origin recorded at selection time; fallback to descriptor membership
+      const origin = getImfOrigin(variableCode);
+      const isNea = origin ? origin === 'nea' : !!IMF_NEA_CODE_TO_DESC[variableCode] && !IMF_WEO_CODE_TO_DESC[variableCode];
       apiData = await apiService.queryImf(apiRequest, { isNea });
     } else {
       apiData = await apiService.query(apiRequest);

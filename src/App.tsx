@@ -40,12 +40,12 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <GlobalHeader 
         currentQuery={currentQuery}
         onQueryChange={handleQueryChange}
       />
-      
+      <main className="flex-1 min-h-0">
       <Routes>
         <Route 
           path="/" 
@@ -69,6 +69,7 @@ function AppContent() {
   <Route path="/info/imf" element={<IMFDatasetInfo />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+      </main>
     </div>
   );
 }
