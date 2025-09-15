@@ -52,10 +52,10 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
     const onChange = (e: MediaQueryListEvent) => setIsMobileViewport(e.matches);
     setIsMobileViewport(mq.matches);
     if (mq.addEventListener) mq.addEventListener('change', onChange);
-    else mq.addListener(onChange as unknown as MediaQueryListListener);
+    else mq.addListener(onChange as unknown as (this: MediaQueryList, ev: MediaQueryListEvent) => void);
     return () => {
       if (mq.removeEventListener) mq.removeEventListener('change', onChange);
-      else mq.removeListener(onChange as unknown as MediaQueryListListener);
+      else mq.removeListener(onChange as unknown as (this: MediaQueryList, ev: MediaQueryListEvent) => void);
     };
   }, []);
   // Refs for FLIP animations (smooth reflow when layout/selection changes)
@@ -362,7 +362,24 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
     try {
       const results = await Promise.allSettled(
         countries.map(async (country) => {
-          const res = await apiService.explainRelationships({ indexA, indexB, country, execute: true });
+          // Build Index payloads from the currently displayed API data
+          const buildIndex = (variableCode: string, cid: string) => {
+            const raw = dataByVar[variableCode] || [];
+            const series = raw
+              .filter(d => d.country === cid && d.value !== null && d.value !== undefined && !Number.isNaN(d.value))
+              .sort((a, b) => a.year - b.year)
+              .map(d => ({ year: d.year, observation: Number(d.value) }));
+            return { name: variableCode, data: series };
+          };
+
+          const payload = {
+            indexA: buildIndex(indexA, country),
+            indexB: buildIndex(indexB, country),
+            country: getCountryById(country)?.name || country,
+            execute: true,
+          };
+
+          const res = await apiService.explainRelationships(payload);
           const text = typeof res?.explanation === 'string' ? res.explanation.trim() : '';
           return { country, text };
         })

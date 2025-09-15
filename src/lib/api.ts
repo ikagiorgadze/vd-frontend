@@ -18,6 +18,24 @@ export interface ApiQueryRequest {
   end_year: number;
 }
 
+// Types for Explain API (frontend payload shape)
+export type IndexData = {
+  year: number;
+  observation: number;
+};
+
+export type Index = {
+  name: string;
+  data: IndexData[];
+};
+
+export type ExplainRequest = {
+  indexA: Index;
+  indexB: Index;
+  country: string;
+  execute?: boolean;
+};
+
 export class VDemApiService {
   private static instance: VDemApiService;
 
@@ -29,6 +47,7 @@ export class VDemApiService {
     }
     return VDemApiService.instance;
   }
+
 
   async query(request: ApiQueryRequest): Promise<ApiDataPoint[]> {
     try {
@@ -90,19 +109,14 @@ export class VDemApiService {
 
   // Explain relationships between two indices (dataset-agnostic)
   // Uses existing API base and fetch infra to avoid duplication.
-  async explainRelationships(payload: {
-    indexA: string;
-    indexB: string;
-    country: string;
-    execute?: boolean;
-  }): Promise<{ explanation?: string } & Record<string, unknown>> {
+  async explainRelationships(payload: ExplainRequest): Promise<{ explanation?: string } & Record<string, unknown>> {
     try {
   const response = await fetch(`${API_BASE_URL}/analysis/relationships/explain`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...payload, execute: true }),
+        body: JSON.stringify({ ...payload, execute: payload.execute ?? true }),
       });
 
       if (!response.ok) {
