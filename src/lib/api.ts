@@ -36,6 +36,31 @@ export type ExplainRequest = {
   execute?: boolean;
 };
 
+export type CorrelationType = 'highest' | 'lowest' | 'strongest' | 'weakest' | 'most_significant' | 'least_significant' | 'most_observations' | 'fewest_observations';
+
+export type DatasetType = 'VDEM' | 'WEO' | 'NEA';
+
+export type CorrelationRequest = {
+  country: string;
+  type: CorrelationType;
+  dataset1: DatasetType;
+  dataset2: DatasetType;
+  minObservations?: number;
+  limit?: number;
+};
+
+export type CorrelationResult = {
+  indexA: string;
+  indexB: string;
+  r: number;
+  n: number;
+  p_value: number;
+};
+
+export type CorrelationsResponse = {
+  correlations: CorrelationResult[];
+};
+
 export class VDemApiService {
   private static instance: VDemApiService;
 
@@ -143,6 +168,50 @@ export class VDemApiService {
     } catch (error) {
       console.error('Explain API request failed:', error);
       // TODO: refine error propagation/shape for UI handling
+      throw error;
+    }
+  }
+
+  // Get correlations between datasets
+  async getCorrelations(payload: CorrelationRequest): Promise<CorrelationsResponse> {
+    try {
+      const params = new URLSearchParams({
+        country: payload.country,
+        type: payload.type,
+        dataset1: payload.dataset1,
+        dataset2: payload.dataset2,
+        ...(payload.minObservations && { minObservations: payload.minObservations.toString() }),
+        ...(payload.limit && { limit: payload.limit.toString() }),
+      });
+
+      const response = await fetch(`${API_BASE_URL}/analysis/relationships/datasets/correlations?${params}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Correlations API failed: ${response.status} ${response.statusText}`);
+      }
+
+      const raw = await response.text();
+      let data: CorrelationsResponse;
+
+      // Handle if response is wrapped in ```
+      if (raw.trim().startsWith('```')) {
+        const lines = raw.split('\n');
+        const jsonStart = lines.findIndex(line => line.trim().startsWith('{') || line.trim().startsWith('['));
+        const jsonEnd = lines.slice(jsonStart).findIndex(line => line.trim().endsWith('}')) + jsonStart;
+        const jsonContent = lines.slice(jsonStart, jsonEnd + 1).join('\n');
+        data = JSON.parse(jsonContent);
+      } else {
+        data = JSON.parse(raw);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Correlations API request failed:', error);
       throw error;
     }
   }

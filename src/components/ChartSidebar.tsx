@@ -3,6 +3,7 @@ import { COUNTRIES, searchCountries } from '@/lib/countries';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { QueryState } from '@/lib/url-state';
 import { CATEGORIES, VDemCategory } from '@/lib/variables';
 import { getSubcategoriesForCategory, getVariablesForSubcategory } from '@/lib/variable-mappings';
@@ -13,23 +14,34 @@ import { getMeasurePathByCode, getMeasurePathByLabel } from '@/lib/measure-index
 import { getVariableName } from '@/lib/variable-codes';
 import { ChevronRight, ChevronDown, X } from 'lucide-react';
 import { Tooltip as UiTooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { cn, getDisplayName } from '@/lib/utils';
 import WEO_GROUPS from '@/weo-indicator-series-codes.json';
 import NEA_GROUPS from '@/nea-indicator-series-codes.json';
 import { IMF_WEO_CODE_TO_DESC, IMF_NEA_CODE_TO_DESC } from '@/lib/imf-codes';
 import { setImfOrigin } from '@/lib/imf-origin';
 import { toast as notify } from '@/components/ui/sonner-toast';
+import { CorrelationType, DatasetType, CorrelationResult } from '@/lib/api';
 
 interface ChartSidebarProps {
   currentQuery: QueryState;
   onQueryChange: (q: QueryState) => void;
   // Optional registration function: parent can receive the revealMeasure callback
   registerReveal?: (fn: ((code: string, displayLabel?: string) => void) | null) => void;
-  // Optional controls rendered under the time period section (e.g., "Explain Correlations" button)
-  explainControls?: React.ReactNode;
+  // Correlations functionality
+  onRunCorrelations?: (type: CorrelationType, dataset1: DatasetType, dataset2: DatasetType, country: string) => void;
+  correlationsLoading?: boolean;
+  correlationsError?: string | null;
+  correlationsResults?: CorrelationResult[] | null;
+  selectedCorrelationPairs?: Set<number>;
+  onToggleCorrelationPair?: (index: number) => void;
+  onAddSelectedCorrelationCharts?: () => void;
+  // Explain correlations functionality
+  selectedForExplain?: string[];
+  explaining?: boolean;
+  onExplainCorrelations?: () => void;
 }
 
-export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, explainControls }: ChartSidebarProps) {
+export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, onRunCorrelations, correlationsLoading, correlationsError, correlationsResults, selectedCorrelationPairs, onToggleCorrelationPair, onAddSelectedCorrelationCharts, selectedForExplain, explaining, onExplainCorrelations }: ChartSidebarProps) {
   const [countrySearch, setCountrySearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<VDemCategory | 'all'>(currentQuery.category || 'all');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>(currentQuery.subcategory || '');
@@ -75,6 +87,12 @@ export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, expl
   // Measurement search
   const [measureSearch, setMeasureSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Correlations state
+  const [selectedCorrelationType, setSelectedCorrelationType] = useState<CorrelationType>('strongest');
+  const [selectedDataset1, setSelectedDataset1] = useState<DatasetType>('VDEM');
+  const [selectedDataset2, setSelectedDataset2] = useState<DatasetType>('WEO');
+  const [selectedCorrelationCountry, setSelectedCorrelationCountry] = useState<string>('');
 
   // Ensure datasets and submenus are collapsed on first mount
   useEffect(() => {
@@ -647,34 +665,165 @@ export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, expl
 
   return (
     <div className="h-full bg-card p-4" id="sidebar-scroll-container">
-  {/* Explain Correlations moved to top; full-width with tooltip on hover */}
-  {explainControls && (
-        <div className="mb-3">
-          <UiTooltip>
-            <TooltipTrigger asChild>
-              {React.isValidElement(explainControls)
-                ? (() => {
-                    const el = explainControls as React.ReactElement<{ className?: string; disabled?: boolean }>;
-                    const isDisabled = !!el.props?.disabled;
-                    const cloned = React.cloneElement(el, {
-                      className: cn('w-full justify-center', el.props?.className),
-                    });
-                    return (
-                      <span className="block w-full" tabIndex={0} aria-disabled={isDisabled}>
-                        {cloned}
-                      </span>
-                    );
-                  })()
-                : <span className="block w-full">{explainControls}</span>}
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <div className="max-w-xs">
-                Choose two charts by clicking their cards. Then click "Explain Correlations" to generate short explanations comparing their relationship for your selected countries.
-              </div>
-            </TooltipContent>
-          </UiTooltip>
+  {/* Correlations section */}
+  {onRunCorrelations && (
+    <div className="mb-4 p-3 border border-border rounded-lg bg-background/50">
+      <h3 className="text-sm font-semibold mb-3">Find Correlations</h3>
+      <div className="space-y-3">
+        <div>
+          <Label htmlFor="correlation-type" className="text-xs">Type</Label>
+          <select
+            id="correlation-type"
+            value={selectedCorrelationType}
+            onChange={(e) => setSelectedCorrelationType(e.target.value as CorrelationType)}
+            className="w-full mt-1 px-2 py-1 text-sm border border-border rounded bg-background"
+          >
+            <option value="highest">Highest (positive)</option>
+            <option value="lowest">Lowest (negative)</option>
+            <option value="strongest">Strongest (magnitude)</option>
+            <option value="weakest">Weakest (magnitude)</option>
+            <option value="most_significant">Most Significant</option>
+            <option value="least_significant">Least Significant</option>
+            <option value="most_observations">Most Observations</option>
+            <option value="fewest_observations">Fewest Observations</option>
+          </select>
+        </div>
+        <div>
+          <Label htmlFor="correlation-country" className="text-xs">Country</Label>
+          <select
+            id="correlation-country"
+            value={selectedCorrelationCountry}
+            onChange={(e) => setSelectedCorrelationCountry(e.target.value)}
+            className="w-full mt-1 px-2 py-1 text-sm border border-border rounded bg-background"
+          >
+            <option value="">Select a country...</option>
+            {currentQuery.countries.map(countryId => {
+              const country = COUNTRIES.find(c => c.id === countryId);
+              return (
+                <option key={countryId} value={countryId}>
+                  {country?.name || countryId}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label htmlFor="dataset1" className="text-xs">Dataset 1</Label>
+            <select
+              id="dataset1"
+              value={selectedDataset1}
+              onChange={(e) => setSelectedDataset1(e.target.value as DatasetType)}
+              className="w-full mt-1 px-2 py-1 text-sm border border-border rounded bg-background"
+            >
+              <option value="VDEM">VDEM</option>
+              <option value="WEO">WEO</option>
+              <option value="NEA">NEA</option>
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="dataset2" className="text-xs">Dataset 2</Label>
+            <select
+              id="dataset2"
+              value={selectedDataset2}
+              onChange={(e) => setSelectedDataset2(e.target.value as DatasetType)}
+              className="w-full mt-1 px-2 py-1 text-sm border border-border rounded bg-background"
+            >
+              <option value="VDEM">VDEM</option>
+              <option value="WEO">WEO</option>
+              <option value="NEA">NEA</option>
+            </select>
+          </div>
+        </div>
+        <Button
+          onClick={() => onRunCorrelations(selectedCorrelationType, selectedDataset1, selectedDataset2, selectedCorrelationCountry)}
+          disabled={correlationsLoading || !selectedCorrelationCountry}
+          className="w-full"
+          size="sm"
+        >
+          {correlationsLoading ? 'Finding...' : 'Find Correlations'}
+        </Button>
+        {correlationsError && (
+          <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200">
+            {correlationsError}
+          </div>
+        )}
+
+        {/* Correlation Results */}
+        {correlationsResults && correlationsResults.length > 0 && (
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-medium">Select pairs to chart:</Label>
+              {onAddSelectedCorrelationCharts && (
+                <Button
+                  onClick={onAddSelectedCorrelationCharts}
+                  disabled={!selectedCorrelationPairs || selectedCorrelationPairs.size === 0}
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-6 px-2"
+                >
+                  Add ({selectedCorrelationPairs?.size || 0})
+                </Button>
+              )}
+            </div>
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {correlationsResults.map((corr, index) => {
+                const fullText = `${getDisplayName(corr.indexA)} vs ${getDisplayName(corr.indexB)}`;
+                return (
+                  <div key={index} className="flex items-center gap-2 p-2 rounded border border-border/50 bg-background/30">
+                    <Checkbox
+                      id={`corr-${index}`}
+                      checked={selectedCorrelationPairs?.has(index) || false}
+                      onCheckedChange={() => onToggleCorrelationPair?.(index)}
+                      className="h-3 w-3"
+                    />
+                    <UiTooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <label
+                          htmlFor={`corr-${index}`}
+                          className="text-xs cursor-pointer flex-1 truncate"
+                        >
+                          {fullText}
+                        </label>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-xs">
+                        <p className="text-sm">{fullText}</p>
+                      </TooltipContent>
+                    </UiTooltip>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Explain Correlations Button */}
+      {onExplainCorrelations && (
+        <div className="mt-3 pt-3 border-t border-border/50">
+          <Button
+            size="sm"
+            variant="default"
+            aria-busy={explaining}
+            disabled={!(selectedForExplain && selectedForExplain.length === 2 && currentQuery.countries.length > 0) || explaining}
+            onClick={onExplainCorrelations}
+            className="w-full"
+            title={currentQuery.countries[0] ? `Using ${COUNTRIES.find(c => c.id === currentQuery.countries[0])?.name || currentQuery.countries[0]}` : 'Select a country to enable'}
+          >
+            {explaining ? (
+              <span className="inline-flex items-center gap-2">
+                <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
+                Explaining...
+              </span>
+            ) : (
+              'Explain Correlations'
+            )}
+          </Button>
         </div>
       )}
+    </div>
+  )}
+
   {/* Measures: dataset menus moved to top (labels removed) */}
   <div className="space-y-2 mb-4">
 
@@ -1111,7 +1260,7 @@ export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, expl
   {/* Explain controls moved to top */}
       </div>
 
-      
+
     </div>
   );
 }

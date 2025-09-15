@@ -1,4 +1,4 @@
-import { getVariableName } from '@/lib/variable-codes';
+import { getDisplayName } from '@/lib/utils';
 import { IMF_WEO_CODE_TO_DESC, IMF_NEA_CODE_TO_DESC } from '@/lib/imf-codes';
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -14,7 +14,7 @@ import { fetchVDemData, VDemDataPoint } from '@/lib/data';
 import { getVariableById } from '@/lib/variables';
 import { getCountryById } from '@/lib/countries';
 import { QueryState, stateToUrlParams } from '@/lib/url-state';
-import { apiService } from '@/lib/api';
+import { apiService, CorrelationType, DatasetType, CorrelationResult } from '@/lib/api';
 
 
 type ChartExplorerProps = {
@@ -39,6 +39,11 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
   // Multiple explanations by country
   const [explanationsByCountry, setExplanationsByCountry] = useState<Record<string, string> | null>(null);
   const [showExplainOverlay, setShowExplainOverlay] = useState(false);
+  // Correlations state
+  const [correlationsLoading, setCorrelationsLoading] = useState(false);
+  const [correlationsResults, setCorrelationsResults] = useState<CorrelationResult[] | null>(null);
+  const [correlationsError, setCorrelationsError] = useState<string | null>(null);
+  const [selectedCorrelationPairs, setSelectedCorrelationPairs] = useState<Set<number>>(new Set());
   // Picker for choosing up to 3 countries when more than 3 are selected
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [pickerCountries, setPickerCountries] = useState<string[]>([]);
@@ -408,6 +413,76 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
     }
   }
 
+  async function runCorrelations(type: CorrelationType, dataset1: DatasetType, dataset2: DatasetType, country: string) {
+    setCorrelationsLoading(true);
+    setCorrelationsError(null);
+    setCorrelationsResults(null);
+    setSelectedCorrelationPairs(new Set());
+    try {
+      const results = await apiService.getCorrelations({
+        country,
+        type,
+        dataset1,
+        dataset2,
+        limit: 10, // Show more options for user to choose from
+      });
+      setCorrelationsResults(results.correlations);
+      // No longer showing overlay - results appear in sidebar
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Failed to fetch correlations';
+      setCorrelationsError(msg);
+    } finally {
+      setCorrelationsLoading(false);
+    }
+  }
+
+  function addSelectedCorrelationCharts() {
+    if (!correlationsResults) return;
+
+    const newVars = [...selectedVars];
+    const selectedIndices = Array.from(selectedCorrelationPairs);
+
+    selectedIndices.forEach(index => {
+      const corr = correlationsResults[index];
+      const indexA = corr.indexA.split(':')[1];
+      const indexB = corr.indexB.split(':')[1];
+      if (!newVars.includes(indexA)) newVars.push(indexA);
+      if (!newVars.includes(indexB)) newVars.push(indexB);
+    });
+
+    if (newVars.length > selectedVars.length) {
+      const next: QueryState = { ...currentQuery };
+      next.variables = newVars;
+      next.variable = newVars[0];
+      handleQueryUpdate(next);
+    }
+
+    // Clear results after adding charts
+    setCorrelationsResults(null);
+    setSelectedCorrelationPairs(new Set());
+  }
+
+  function toggleCorrelationPair(index: number) {
+    const newSelected = new Set(selectedCorrelationPairs);
+    if (newSelected.has(index)) {
+      newSelected.delete(index);
+    } else {
+      newSelected.add(index);
+    }
+    setSelectedCorrelationPairs(newSelected);
+  }
+
+  async function handleExplainCorrelations() {
+    if (selectedForExplain.length !== 2 || currentQuery.countries.length === 0) return;
+    const selected = currentQuery.countries;
+    if (selected.length <= 3) {
+      await runExplainForCountries(selected);
+    } else {
+      setPickerCountries(selected.slice(0, 3));
+      setShowCountryPicker(true);
+    }
+  }
+
   const handleDownloadCSVFor = (variableCode: string, rows: ChartRow[]) => {
     if (!rows || rows.length === 0) return;
     const csvHeaders = ['Year', ...currentQuery.countries.map(id => getCountryById(id)?.name || id)];
@@ -476,9 +551,7 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
     const variableMeta = getVariableById(v);
     const variableLabel =
       variableMeta?.label ||
-      getVariableName(v) ||
-      IMF_WEO_CODE_TO_DESC[v] ||
-      IMF_NEA_CODE_TO_DESC[v] ||
+      getDisplayName(v) ||
       v;
     const variableScale = variableMeta?.scale ?? '';
     const variableUnit = variableMeta?.unit;
@@ -774,18 +847,22 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
           ) : (
             <div className="flex flex-col h-full min-h-0">
               {/* Explain Correlations button moved into sidebar; no CTA here */}
-              {/* Grid of charts: 1 column on mobile, 2 columns on desktop; vertically scrollable, unlimited charts */}
+              {/* Grid of charts: responsive layout - single chart full width, multiple charts side by side */}
               <div className="flex-1 min-h-0">
                 <div
                   ref={gridRef}
-                  className="grid grid-cols-1 sm:grid-cols-2 gap-3 h-full overflow-y-auto min-h-0"
+                  className={`grid gap-3 h-full overflow-y-auto min-h-0 ${
+                    unifiedVars.length === 1 
+                      ? 'grid-cols-1' 
+                      : 'grid-cols-2'
+                  }`}
                   style={{ gridAutoRows: isMobileViewport ? '320px' : (unifiedVars.length === 1 ? '630px' : '420px') }}
                 >
           {unifiedVars.map((v) => (
                     <div
                       key={`cell-${v}`}
                       ref={(el) => { tileRefs.current[v] = el; }}
-                      className={`min-h-0 will-change-transform [contain:content] ${unifiedVars.length === 1 ? 'sm:col-span-2' : ''}`}
+                      className="min-h-0 will-change-transform [contain:content]"
                       style={{ height: '100%' }}
                     >
                       {renderChartCard(v)}
@@ -897,6 +974,7 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
               </div>
             </div>
           )}
+
         </div>
   {/* Right: Sidebar - fixed width on desktop */}
   <div id="desktop-sidebar-scroll" className="hidden sm:block h-full overflow-y-auto min-h-0">
@@ -904,34 +982,16 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
             currentQuery={currentQuery}
             onQueryChange={handleQueryUpdate}
             registerReveal={registerReveal}
-            explainControls={
-              <Button
-                size="sm"
-                variant="default"
-                aria-busy={explaining}
-                disabled={!(selectedForExplain.length === 2 && currentQuery.countries.length > 0) || explaining}
-                onClick={async () => {
-                  if (selectedForExplain.length !== 2 || currentQuery.countries.length === 0) return;
-                  const selected = currentQuery.countries;
-                  if (selected.length <= 3) {
-                    await runExplainForCountries(selected);
-                  } else {
-                    setPickerCountries(selected.slice(0, 3));
-                    setShowCountryPicker(true);
-                  }
-                }}
-                title={currentQuery.countries[0] ? `Using ${getCountryById(currentQuery.countries[0])?.name || currentQuery.countries[0]}` : 'Select a country to enable'}
-              >
-                {explaining ? (
-                  <span className="inline-flex items-center gap-2">
-                    <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
-                    Explaining...
-                  </span>
-                ) : (
-                  'Explain Correlations'
-                )}
-              </Button>
-            }
+            onRunCorrelations={runCorrelations}
+            correlationsLoading={correlationsLoading}
+            correlationsError={correlationsError}
+            correlationsResults={correlationsResults}
+            selectedCorrelationPairs={selectedCorrelationPairs}
+            onToggleCorrelationPair={toggleCorrelationPair}
+            onAddSelectedCorrelationCharts={addSelectedCorrelationCharts}
+            selectedForExplain={selectedForExplain}
+            explaining={explaining}
+            onExplainCorrelations={handleExplainCorrelations}
           />
         </div>
       </div>
@@ -951,6 +1011,16 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
               currentQuery={currentQuery}
               onQueryChange={handleQueryUpdate}
               registerReveal={registerReveal}
+              onRunCorrelations={runCorrelations}
+              correlationsLoading={correlationsLoading}
+              correlationsError={correlationsError}
+              correlationsResults={correlationsResults}
+              selectedCorrelationPairs={selectedCorrelationPairs}
+              onToggleCorrelationPair={toggleCorrelationPair}
+              onAddSelectedCorrelationCharts={addSelectedCorrelationCharts}
+              selectedForExplain={selectedForExplain}
+              explaining={explaining}
+              onExplainCorrelations={handleExplainCorrelations}
             />
           </div>
         </div>
