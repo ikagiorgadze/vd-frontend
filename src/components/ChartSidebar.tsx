@@ -13,7 +13,7 @@ import { getMeasurePathByCode, getMeasurePathByLabel } from '@/lib/measure-index
 import { getVariableName } from '@/lib/variable-codes';
 import { ChevronRight, ChevronDown, X } from 'lucide-react';
 import { Tooltip as UiTooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import HelpIcon from '@/components/ui/help-icon';
+import { cn } from '@/lib/utils';
 import WEO_GROUPS from '@/weo-indicator-series-codes.json';
 import NEA_GROUPS from '@/nea-indicator-series-codes.json';
 import { IMF_WEO_CODE_TO_DESC, IMF_NEA_CODE_TO_DESC } from '@/lib/imf-codes';
@@ -647,6 +647,34 @@ export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, expl
 
   return (
     <div className="h-full bg-card p-4" id="sidebar-scroll-container">
+  {/* Explain Correlations moved to top; full-width with tooltip on hover */}
+  {explainControls && (
+        <div className="mb-3">
+          <UiTooltip>
+            <TooltipTrigger asChild>
+              {React.isValidElement(explainControls)
+                ? (() => {
+                    const el = explainControls as React.ReactElement<{ className?: string; disabled?: boolean }>;
+                    const isDisabled = !!el.props?.disabled;
+                    const cloned = React.cloneElement(el, {
+                      className: cn('w-full justify-center', el.props?.className),
+                    });
+                    return (
+                      <span className="block w-full" tabIndex={0} aria-disabled={isDisabled}>
+                        {cloned}
+                      </span>
+                    );
+                  })()
+                : <span className="block w-full">{explainControls}</span>}
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <div className="max-w-xs">
+                Choose two charts by clicking their cards. Then click "Explain Correlations" to generate short explanations comparing their relationship for your selected countries.
+              </div>
+            </TooltipContent>
+          </UiTooltip>
+        </div>
+      )}
   {/* Measures: dataset menus moved to top (labels removed) */}
   <div className="space-y-2 mb-4">
 
@@ -1080,23 +1108,7 @@ export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, expl
             />
           </div>
         </div>
-        {explainControls && (
-          <div className="flex items-center gap-2 pt-2">
-            {explainControls}
-            <UiTooltip>
-              <TooltipTrigger asChild>
-                <button aria-label="Explain correlations help" className="focus:outline-none">
-                  <HelpIcon />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <div className="max-w-xs">
-                  Choose two charts by clicking their cards. Then click "Explain Correlations" to generate short explanations comparing their relationship for your selected countries.
-                </div>
-              </TooltipContent>
-            </UiTooltip>
-          </div>
-        )}
+  {/* Explain controls moved to top */}
       </div>
 
       

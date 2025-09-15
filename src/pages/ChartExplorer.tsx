@@ -253,7 +253,9 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
     // Accept headings in multiple forms:
     // - **Summary:** (existing)
     // - Summary / Why it matters / Drivers/Context / Caveats (case-insensitive, optional colon)
-    const boldHeadingRegex = /^\s*\*\*(.+?):\*\*\s*$/;
+  const boldHeadingRegex = /^\s*\*\*(.+?):\*\*\s*$/;
+  // Markdown hash headings e.g., "### Summary" or "#### Caveats"
+  const mdHeadingRegex = /^\s{0,3}#{1,6}\s+(.+?)\s*$/;
     const canonicalHeaders = new Set([
       'summary',
       'why it matters',
@@ -280,6 +282,17 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
       if (boldHeadingMatch) {
         blocks.push(
           <h4 key={key++} className="text-base font-semibold mt-3 mb-1.5">{boldHeadingMatch[1]}</h4>
+        );
+        i++;
+        continue;
+      }
+
+      // Hash markdown heading (e.g., ### Summary)
+      const mdHeadingMatch = mdHeadingRegex.exec(trimmed);
+      if (mdHeadingMatch) {
+        const title = mdHeadingMatch[1].replace(/:$/, '');
+        blocks.push(
+          <h4 key={key++} className="text-base font-semibold mt-3 mb-1.5">{title}</h4>
         );
         i++;
         continue;
