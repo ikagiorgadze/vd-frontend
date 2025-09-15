@@ -278,7 +278,9 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
       'drivers- context',
       'drivers - context',
       'context',
-      'caveats',
+  'caveats',
+  'real examples',
+  'examples',
     ]);
     const isPlainHeader = (raw: string) => {
       const t = raw.trim().replace(/\s{2,}$/g, ''); // drop trailing spaces used for markdown breaks
