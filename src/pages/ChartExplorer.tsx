@@ -44,6 +44,20 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
   const [pickerCountries, setPickerCountries] = useState<string[]>([]);
   // Grid container ref (for potential future use)
   const gridRef = useRef<HTMLDivElement | null>(null);
+  // Mobile viewport detection to adjust chart heights
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 639px)');
+    const onChange = (e: MediaQueryListEvent) => setIsMobileViewport(e.matches);
+    setIsMobileViewport(mq.matches);
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else mq.addListener(onChange as unknown as MediaQueryListListener);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', onChange);
+      else mq.removeListener(onChange as unknown as MediaQueryListListener);
+    };
+  }, []);
   // Refs for FLIP animations (smooth reflow when layout/selection changes)
   const tileRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const prevRectsRef = useRef<Record<string, DOMRect>>({});
@@ -695,8 +709,35 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_360px] gap-0 p-4 h-full overflow-hidden min-h-0">
         {/* Left: Chart area fills all space up to the sidebar */}
         <div className="pr-0 sm:pr-4 min-h-0 h-full overflow-hidden relative">
-          {/* Mobile-only Filters button (only on small screens) */}
-          <div className="flex items-center justify-end mb-3 sm:hidden">
+          {/* Mobile-only top bar: Explain (left) and Filters (right) */}
+          <div className="flex items-center justify-between mb-3 sm:hidden">
+            <Button
+              size="sm"
+              variant="default"
+              aria-busy={explaining}
+              disabled={!(selectedForExplain.length === 2 && currentQuery.countries.length > 0) || explaining}
+              onClick={async () => {
+                if (selectedForExplain.length !== 2 || currentQuery.countries.length === 0) return;
+                const selected = currentQuery.countries;
+                if (selected.length <= 3) {
+                  await runExplainForCountries(selected);
+                } else {
+                  setPickerCountries(selected.slice(0, 3));
+                  setShowCountryPicker(true);
+                }
+              }}
+              title={currentQuery.countries[0] ? `Using ${getCountryById(currentQuery.countries[0])?.name || currentQuery.countries[0]}` : 'Select a country to enable'}
+            >
+              {explaining ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
+                  Explaining...
+                </span>
+              ) : (
+                'Explain'
+              )}
+            </Button>
+
             <Button variant="outline" size="sm" onClick={() => setMobileFiltersOpen(true)}>
               <Filter className="h-4 w-4 mr-2" />
               Filters
@@ -718,7 +759,7 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
                 <div
                   ref={gridRef}
                   className="grid grid-cols-1 sm:grid-cols-2 gap-3 h-full overflow-y-auto min-h-0"
-                  style={{ gridAutoRows: unifiedVars.length === 1 ? '630px' : '420px' }}
+                  style={{ gridAutoRows: isMobileViewport ? '320px' : (unifiedVars.length === 1 ? '630px' : '420px') }}
                 >
           {unifiedVars.map((v) => (
                     <div
@@ -890,34 +931,6 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
               currentQuery={currentQuery}
               onQueryChange={handleQueryUpdate}
               registerReveal={registerReveal}
-              explainControls={
-                <Button
-                  size="sm"
-                  variant="default"
-                  aria-busy={explaining}
-                  disabled={!(selectedForExplain.length === 2 && currentQuery.countries.length > 0) || explaining}
-                  onClick={async () => {
-                    if (selectedForExplain.length !== 2 || currentQuery.countries.length === 0) return;
-                    const selected = currentQuery.countries;
-                    if (selected.length <= 3) {
-                      await runExplainForCountries(selected);
-                    } else {
-                      setPickerCountries(selected.slice(0, 3));
-                      setShowCountryPicker(true);
-                    }
-                  }}
-                  title={currentQuery.countries[0] ? `Using ${getCountryById(currentQuery.countries[0])?.name || currentQuery.countries[0]}` : 'Select a country to enable'}
-                >
-                  {explaining ? (
-                    <span className="inline-flex items-center gap-2">
-                      <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
-                      Explaining...
-                    </span>
-                  ) : (
-                    'Explain Correlations'
-                  )}
-                </Button>
-              }
             />
           </div>
         </div>
