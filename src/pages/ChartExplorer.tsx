@@ -49,6 +49,9 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
   const prevRectsRef = useRef<Record<string, DOMRect>>({});
   // Controlled animation key so lines draw from left to right right after data loads
   const [animateKey, setAnimateKey] = useState<number>(0);
+  // transient copy feedback: which variable's share link was just copied
+  const [copiedVar, setCopiedVar] = useState<string | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
 
   // Ref to receive revealMeasure from the sidebar
   const sidebarRevealRef = useRef<((code: string, displayLabel?: string) => void) | null>(null);
@@ -379,11 +382,24 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
     URL.revokeObjectURL(url);
   };
 
-  const handleShareLink = () => {
+  const handleShareLink = (v?: string) => {
     const url = window.location.href;
     navigator.clipboard.writeText(url).then(() => {
-      // You could add a toast notification here
+      // set transient UI feedback for the specific chart button
+      if (v) {
+        // clear any previous timer
+        if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+        setCopiedVar(v);
+        // clear after 1s
+        copyTimerRef.current = window.setTimeout(() => {
+          setCopiedVar(null);
+          copyTimerRef.current = null;
+        }, 1000);
+      }
+      // You could also show a toast here if desired
       console.log('Link copied to clipboard');
+    }).catch((err) => {
+      console.warn('Failed to copy link', err);
     });
   };
 
@@ -647,9 +663,14 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
             <Download className="h-4 w-4 mr-1" />
             Download CSV
           </Button>
-          <Button variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={(e) => { e.stopPropagation(); handleShareLink(); }}>
+          <Button
+            variant={copiedVar === v ? 'default' : 'outline'}
+            size="sm"
+            className={`h-8 px-2 text-xs ${copiedVar === v ? 'bg-success-green text-white border-success-green' : ''}`}
+            onClick={(e) => { e.stopPropagation(); handleShareLink(v); }}
+          >
             <Link2 className="h-4 w-4 mr-1" />
-            Copy Share Link
+            {copiedVar === v ? 'Copied' : 'Copy Share Link'}
           </Button>
         </div>
       </div>
