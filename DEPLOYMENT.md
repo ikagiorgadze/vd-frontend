@@ -9,10 +9,12 @@ One-time EC2 bootstrap
 1) SSH to instance and install basics
    - sudo apt-get update -y && sudo apt-get install -y git nginx
    - Install Node.js 20: curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs
-2) Ensure firewall allows HTTP
+2) Ensure firewall and security group allow HTTP+HTTPS
    - sudo ufw allow OpenSSH
    - sudo ufw allow 80/tcp
+   - sudo ufw allow 443/tcp
    - sudo ufw enable
+   - In your cloud provider, allow inbound 80 and 443 in the instance Security Group
 
 GitHub Secrets required (in vd-frontend repo)
 - EC2_HOST: public IP or DNS
@@ -25,3 +27,16 @@ CI/CD behavior
 
 Environment (.env)
 - VITE_API_BASE_URL=/api so that production calls go through the same domain under /api.
+
+TLS certificates (Let’s Encrypt)
+- The included Nginx config expects certificates at /etc/letsencrypt/live/democracy-dashboard.com/…
+- Issue them once using HTTP-01 with webroot after Nginx is serving HTTP:
+   - sudo apt-get install -y certbot
+   - sudo certbot certonly --webroot -w /var/www/vd-frontend -d democracy-dashboard.com -d www.democracy-dashboard.com
+   - sudo systemctl reload nginx
+   - Certificates auto-renew; ensure a cron/systemd timer exists (certbot installs one by default)
+
+DNS and redirects
+- Create A/AAAA records for democracy-dashboard.com and www.democracy-dashboard.com pointing to the EC2 public IP
+- The site redirects HTTP to HTTPS; www is handled as an alias of the apex
+- If using a proxy like Cloudflare, temporarily set DNS-only (grey cloud) when issuing/renewing certificates via HTTP-01
