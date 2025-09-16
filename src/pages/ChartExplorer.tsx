@@ -446,14 +446,8 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
       pairedVariables.add(pair.var2);
     });
 
-    // Add regular variables (excluding those in pairs)
-    unifiedVars.forEach(v => {
-      if (!pairedVariables.has(v)) {
-        items.push({ type: 'variable', id: v });
-      }
-    });
-
-    // Add correlation pairs
+    // Priority order: correlation pairs first, then custom pairs, then separate charts
+    // Add correlation pairs first
     correlationPairs.forEach((pair, index) => {
       items.push({
         type: 'correlation-pair',
@@ -462,13 +456,20 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
       });
     });
 
-    // Add custom pairs
+    // Add custom pairs second
     customPairs.forEach((pair, index) => {
       items.push({
         type: 'custom-pair',
         id: `custom-pair-${index}`,
         data: pair
       });
+    });
+
+    // Add regular variables (excluding those in pairs) last
+    unifiedVars.forEach(v => {
+      if (!pairedVariables.has(v)) {
+        items.push({ type: 'variable', id: v });
+      }
     });
 
     return items;
