@@ -3,7 +3,7 @@
 // In all environments, allow override via VITE_API_BASE_URL.
 const API_BASE_URL =
   (import.meta.env.VITE_API_BASE_URL && String(import.meta.env.VITE_API_BASE_URL).trim()) ||
-  'http://localhost:3000';
+  '/api';
 
 export interface ApiDataPoint {
   country_name: string;
