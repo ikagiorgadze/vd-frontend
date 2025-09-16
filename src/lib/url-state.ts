@@ -1,4 +1,5 @@
 import { VDemCategory } from './variables';
+import { CorrelationType, DatasetType, CorrelationPair } from './api';
 
 export interface QueryState {
   countries: string[];
@@ -11,6 +12,13 @@ export interface QueryState {
   chartType?: 'line' | 'bar' | 'area' | 'scatter';
   normalize?: boolean;
   compareRegion?: boolean;
+  // Correlations-related fields
+  correlationDatasets?: DatasetType[];
+  correlationCountry?: string;
+  correlationType?: CorrelationType;
+  correlationPairs?: CorrelationPair[];
+  // Custom pairs (user-created pairs)
+  customPairs?: Array<{ var1: string; var2: string }>;
 }
 
 export const DEFAULT_STATE: QueryState = {
@@ -19,7 +27,11 @@ export const DEFAULT_STATE: QueryState = {
   endYear: 2024,
   chartType: 'line',
   normalize: false,
-  compareRegion: false
+  compareRegion: false,
+  correlationDatasets: [],
+  correlationType: 'strongest',
+  correlationPairs: [],
+  customPairs: []
 };
 
 export function stateToUrlParams(state: QueryState): URLSearchParams {
@@ -48,6 +60,23 @@ export function stateToUrlParams(state: QueryState): URLSearchParams {
   if (state.normalize) params.set('normalize', 'true');
   if (state.compareRegion) params.set('region', 'true');
   
+  // Correlation parameters
+  if (state.correlationDatasets && state.correlationDatasets.length > 0) {
+    params.set('corr-datasets', state.correlationDatasets.join(','));
+  }
+  if (state.correlationCountry) {
+    params.set('corr-country', state.correlationCountry);
+  }
+  if (state.correlationType && state.correlationType !== 'strongest') {
+    params.set('corr-type', state.correlationType);
+  }
+  if (state.correlationPairs && state.correlationPairs.length > 0) {
+    params.set('corr-pairs', JSON.stringify(state.correlationPairs));
+  }
+  if (state.customPairs && state.customPairs.length > 0) {
+    params.set('custom-pairs', JSON.stringify(state.customPairs));
+  }
+  
   return params;
 }
 
@@ -72,7 +101,18 @@ export function urlParamsToState(params: URLSearchParams): QueryState {
     subcategory: params.get('sub') || undefined,
     chartType: (params.get('chart') as QueryState['chartType']) || DEFAULT_STATE.chartType,
     normalize: params.get('normalize') === 'true',
-    compareRegion: params.get('region') === 'true'
+    compareRegion: params.get('region') === 'true',
+    correlationDatasets: params.get('corr-datasets') ? 
+      params.get('corr-datasets')!.split(',').filter(Boolean) as DatasetType[] : 
+      DEFAULT_STATE.correlationDatasets,
+    correlationCountry: params.get('corr-country') || DEFAULT_STATE.correlationCountry,
+    correlationType: (params.get('corr-type') as CorrelationType) || DEFAULT_STATE.correlationType,
+    correlationPairs: params.get('corr-pairs') ? 
+      JSON.parse(params.get('corr-pairs')!) as CorrelationPair[] : 
+      DEFAULT_STATE.correlationPairs,
+    customPairs: params.get('custom-pairs') ? 
+      JSON.parse(params.get('custom-pairs')!) as Array<{ var1: string; var2: string }> : 
+      DEFAULT_STATE.customPairs
   };
 }
 
