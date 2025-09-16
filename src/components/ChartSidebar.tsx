@@ -14,34 +14,237 @@ import { getMeasurePathByCode, getMeasurePathByLabel } from '@/lib/measure-index
 import { getVariableName } from '@/lib/variable-codes';
 import { ChevronRight, ChevronDown, X } from 'lucide-react';
 import { Tooltip as UiTooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { cn, getDisplayName } from '@/lib/utils';
+import HelpIcon from '@/components/ui/help-icon';
+import { cn } from '@/lib/utils';
 import WEO_GROUPS from '@/weo-indicator-series-codes.json';
 import NEA_GROUPS from '@/nea-indicator-series-codes.json';
 import { IMF_WEO_CODE_TO_DESC, IMF_NEA_CODE_TO_DESC } from '@/lib/imf-codes';
 import { setImfOrigin } from '@/lib/imf-origin';
 import { toast as notify } from '@/components/ui/sonner-toast';
-import { CorrelationType, DatasetType, CorrelationResult } from '@/lib/api';
+
+// Year range slider: top-level component so it preserves state across parent re-renders
+function YearRangeSlider({
+  startYear,
+  endYear,
+  onStartYearChange,
+  onEndYearChange,
+  min = 1900,
+  max = new Date().getFullYear(),
+}: {
+  startYear: number;
+  endYear: number;
+  onStartYearChange: (year: number) => void;
+  onEndYearChange: (year: number) => void;
+  min?: number;
+  max?: number;
+}) {
+  const [isDragging, setIsDragging] = useState<'start' | 'end' | null>(null);
+  const trackRef = useRef<HTMLDivElement | null>(null);
+
+  const getYearFromClientX = useCallback((clientX: number) => {
+    const track = trackRef.current;
+    if (!track) return null;
+    const rect = track.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const percentage = Math.max(0, Math.min(1, x / rect.width));
+    return Math.round(min + (max - min) * percentage);
+  }, [min, max]);
+
+  const handleMouseDown = (type: 'start' | 'end') => (e: React.MouseEvent) => {
+    setIsDragging(type);
+    e.preventDefault();
+    e.stopPropagation(); // avoid triggering track mousedown
+  };
+
+  const handleTouchStartHandle = (type: 'start' | 'end') => (e: React.TouchEvent) => {
+    setIsDragging(type);
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  // Clicking the track moves the nearest handle and starts dragging
+  const handleTrackMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const y = getYearFromClientX(e.clientX);
+    if (y == null) return;
+    const distStart = Math.abs(y - startYear);
+    const distEnd = Math.abs(y - endYear);
+    if (distStart <= distEnd) {
+      const clamped = Math.max(min, Math.min(endYear - 1, y));
+      onStartYearChange(clamped);
+      setIsDragging('start');
+    } else {
+      const clamped = Math.max(startYear + 1, Math.min(max, y));
+      onEndYearChange(clamped);
+      setIsDragging('end');
+    }
+  };
+
+  const handleGlobalMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDragging) return;
+    const year = getYearFromClientX(e.clientX);
+    if (year == null) return;
+    if (isDragging === 'start') {
+      const clampedYear = Math.max(min, Math.min(endYear - 1, year));
+      onStartYearChange(clampedYear);
+    } else if (isDragging === 'end') {
+      const clampedYear = Math.max(startYear + 1, Math.min(max, year));
+      onEndYearChange(clampedYear);
+    }
+  }, [isDragging, getYearFromClientX, startYear, endYear, min, max, onStartYearChange, onEndYearChange]);
+
+  // Touch support
+  const handleTrackTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    const y = getYearFromClientX(touch.clientX);
+    if (y == null) return;
+    const distStart = Math.abs(y - startYear);
+    const distEnd = Math.abs(y - endYear);
+    if (distStart <= distEnd) {
+      const clamped = Math.max(min, Math.min(endYear - 1, y));
+      onStartYearChange(clamped);
+      setIsDragging('start');
+    } else {
+      const clamped = Math.max(startYear + 1, Math.min(max, y));
+      onEndYearChange(clamped);
+      setIsDragging('end');
+    }
+  };
+
+  const handleGlobalTouchMove = useCallback((e: TouchEvent) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    if (!touch) return;
+    const year = getYearFromClientX(touch.clientX);
+    if (year == null) return;
+    if (isDragging === 'start') {
+      const clampedYear = Math.max(min, Math.min(endYear - 1, year));
+      onStartYearChange(clampedYear);
+    } else if (isDragging === 'end') {
+      const clampedYear = Math.max(startYear + 1, Math.min(max, year));
+      onEndYearChange(clampedYear);
+    }
+  }, [isDragging, getYearFromClientX, startYear, endYear, min, max, onStartYearChange, onEndYearChange]);
+
+  useEffect(() => {
+    if (isDragging) {
+      const handleGlobalMouseUp = () => {
+        setIsDragging(null);
+      };
+
+      // Capture current track element for cleanup
+      const currentTrack = trackRef.current;
+
+      // Disable transitions during drag for immediate response
+      if (currentTrack) {
+        const track = currentTrack.querySelector('.absolute.h-full.bg-primary\\/60') as HTMLElement;
+        if (track) track.style.transition = 'none';
+        const handles = currentTrack.querySelectorAll('.absolute.w-4.h-4') as NodeListOf<HTMLElement>;
+        handles.forEach(h => h.style.transition = 'none');
+      }
+
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+      document.addEventListener('mousemove', handleGlobalMouseMove);
+      document.addEventListener('touchend', handleGlobalMouseUp);
+      document.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
+
+      return () => {
+        document.removeEventListener('mouseup', handleGlobalMouseUp);
+        document.removeEventListener('mousemove', handleGlobalMouseMove);
+        document.removeEventListener('touchend', handleGlobalMouseUp);
+        document.removeEventListener('touchmove', handleGlobalTouchMove);
+
+        // Restore transitions after drag
+        if (currentTrack) {
+          const track = currentTrack.querySelector('.absolute.h-full.bg-primary\\/60') as HTMLElement;
+          if (track) track.style.transition = 'left 200ms ease, width 200ms ease';
+          const handles = currentTrack.querySelectorAll('.absolute.w-4.h-4') as NodeListOf<HTMLElement>;
+          handles.forEach(h => h.style.transition = 'left 200ms ease, transform 200ms ease');
+        }
+      };
+    }
+  }, [isDragging, handleGlobalMouseMove, handleGlobalTouchMove]);
+
+  const startPercentage = ((startYear - min) / (max - min)) * 100;
+  const endPercentage = ((endYear - min) / (max - min)) * 100;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>{startYear}</span>
+        <span className="font-medium">Time Period</span>
+        <span>{endYear}</span>
+      </div>
+
+      <div
+        ref={trackRef}
+        className="relative h-2 bg-muted/50 rounded-full cursor-pointer select-none year-range-slider-track"
+        onMouseDown={handleTrackMouseDown}
+        onTouchStart={handleTrackTouchStart}
+      >
+        {/* Track */}
+        <div
+          className="absolute h-full bg-primary/60 rounded-full"
+          style={{
+            left: `${startPercentage}%`,
+            width: `${endPercentage - startPercentage}%`,
+            transition: 'left 200ms ease, width 200ms ease',
+          }}
+        />
+
+        {/* Start handle */}
+        <div
+          className="absolute w-4 h-4 bg-primary rounded-full border-2 border-background shadow-sm -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing hover:scale-110 transition-transform"
+          style={{
+            left: `${startPercentage}%`,
+            top: '50%',
+            transition: 'left 200ms ease, transform 200ms ease',
+          }}
+          onMouseDown={handleMouseDown('start')}
+          onTouchStart={handleTouchStartHandle('start')}
+        />
+
+        {/* End handle */}
+        <div
+          className="absolute w-4 h-4 bg-primary rounded-full border-2 border-background shadow-sm -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing hover:scale-110 transition-transform"
+          style={{
+            left: `${endPercentage}%`,
+            top: '50%',
+            transition: 'left 200ms ease, transform 200ms ease',
+          }}
+          onMouseDown={handleMouseDown('end')}
+          onTouchStart={handleTouchStartHandle('end')}
+        />
+      </div>
+
+      <div className="flex justify-between text-xs text-muted-foreground">
+        <span>{min}</span>
+        <span>{max}</span>
+      </div>
+    </div>
+  );
+}
 
 interface ChartSidebarProps {
   currentQuery: QueryState;
   onQueryChange: (q: QueryState) => void;
   // Optional registration function: parent can receive the revealMeasure callback
   registerReveal?: (fn: ((code: string, displayLabel?: string) => void) | null) => void;
-  // Correlations functionality
-  onRunCorrelations?: (type: CorrelationType, dataset1: DatasetType, dataset2: DatasetType, country: string) => void;
-  correlationsLoading?: boolean;
-  correlationsError?: string | null;
-  correlationsResults?: CorrelationResult[] | null;
-  selectedCorrelationPairs?: Set<number>;
-  onToggleCorrelationPair?: (index: number) => void;
-  onAddSelectedCorrelationCharts?: () => void;
-  // Explain correlations functionality
-  selectedForExplain?: string[];
-  explaining?: boolean;
-  onExplainCorrelations?: () => void;
+  // Optional controls rendered under the time period section (e.g., "Explain Correlations" button)
+  explainControls?: React.ReactNode;
+  // Pending changes indicator
+  hasPendingChanges?: boolean;
 }
 
-export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, onRunCorrelations, correlationsLoading, correlationsError, correlationsResults, selectedCorrelationPairs, onToggleCorrelationPair, onAddSelectedCorrelationCharts, selectedForExplain, explaining, onExplainCorrelations }: ChartSidebarProps) {
+export function ChartSidebar({ 
+  currentQuery, 
+  onQueryChange, 
+  registerReveal, 
+  explainControls,
+  hasPendingChanges = false
+}: ChartSidebarProps) {
   const [countrySearch, setCountrySearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<VDemCategory | 'all'>(currentQuery.category || 'all');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>(currentQuery.subcategory || '');
@@ -84,16 +287,27 @@ export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, onRu
   };
   // Collapsed state for countries section
   const [countriesCollapsed, setCountriesCollapsed] = useState<boolean>(false);
+  // Mobile viewport detection
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 639px)');
+    const onChange = (e: MediaQueryListEvent) => setIsMobileViewport(e.matches);
+    setIsMobileViewport(mq.matches);
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else mq.addListener(onChange as unknown as (this: MediaQueryList, ev: MediaQueryListEvent) => void);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', onChange);
+      else mq.removeListener(onChange as unknown as (this: MediaQueryList, ev: MediaQueryListEvent) => void);
+    };
+  }, []);
   // Measurement search
   const [measureSearch, setMeasureSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // Correlations state
-  const [selectedCorrelationType, setSelectedCorrelationType] = useState<CorrelationType>('strongest');
-  const [selectedDataset1, setSelectedDataset1] = useState<DatasetType>('VDEM');
-  const [selectedDataset2, setSelectedDataset2] = useState<DatasetType>('WEO');
-  const [selectedCorrelationCountry, setSelectedCorrelationCountry] = useState<string>('');
+  // ...existing code...
 
+  // Update correlation country when countries change
   // Ensure datasets and submenus are collapsed on first mount
   useEffect(() => {
     setExpandedDatasets(new Set());
@@ -665,164 +879,48 @@ export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, onRu
 
   return (
     <div className="h-full bg-card p-4" id="sidebar-scroll-container">
-  {/* Correlations section */}
-  {onRunCorrelations && (
-    <div className="mb-4 p-3 border border-border rounded-lg bg-background/50">
-      <h3 className="text-sm font-semibold mb-3">Find Correlations</h3>
-      <div className="space-y-3">
-        <div>
-          <Label htmlFor="correlation-type" className="text-xs">Type</Label>
-          <select
-            id="correlation-type"
-            value={selectedCorrelationType}
-            onChange={(e) => setSelectedCorrelationType(e.target.value as CorrelationType)}
-            className="w-full mt-1 px-2 py-1 text-sm border border-border rounded bg-background"
-          >
-            <option value="highest">Highest (positive)</option>
-            <option value="lowest">Lowest (negative)</option>
-            <option value="strongest">Strongest (magnitude)</option>
-            <option value="weakest">Weakest (magnitude)</option>
-            <option value="most_significant">Most Significant</option>
-            <option value="least_significant">Least Significant</option>
-            <option value="most_observations">Most Observations</option>
-            <option value="fewest_observations">Fewest Observations</option>
-          </select>
-        </div>
-        <div>
-          <Label htmlFor="correlation-country" className="text-xs">Country</Label>
-          <select
-            id="correlation-country"
-            value={selectedCorrelationCountry}
-            onChange={(e) => setSelectedCorrelationCountry(e.target.value)}
-            className="w-full mt-1 px-2 py-1 text-sm border border-border rounded bg-background"
-          >
-            <option value="">Select a country...</option>
-            {currentQuery.countries.map(countryId => {
-              const country = COUNTRIES.find(c => c.id === countryId);
-              return (
-                <option key={countryId} value={countryId}>
-                  {country?.name || countryId}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <Label htmlFor="dataset1" className="text-xs">Dataset 1</Label>
-            <select
-              id="dataset1"
-              value={selectedDataset1}
-              onChange={(e) => setSelectedDataset1(e.target.value as DatasetType)}
-              className="w-full mt-1 px-2 py-1 text-sm border border-border rounded bg-background"
-            >
-              <option value="VDEM">VDEM</option>
-              <option value="WEO">WEO</option>
-              <option value="NEA">NEA</option>
-            </select>
+      {/* Pending changes indicator */}
+      {hasPendingChanges && (
+        <div className="sticky top-0 z-10 mb-4 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/30 rounded-lg shadow-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+            <span className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+              Changes pending - apply to load new data
+            </span>
           </div>
-          <div>
-            <Label htmlFor="dataset2" className="text-xs">Dataset 2</Label>
-            <select
-              id="dataset2"
-              value={selectedDataset2}
-              onChange={(e) => setSelectedDataset2(e.target.value as DatasetType)}
-              className="w-full mt-1 px-2 py-1 text-sm border border-border rounded bg-background"
-            >
-              <option value="VDEM">VDEM</option>
-              <option value="WEO">WEO</option>
-              <option value="NEA">NEA</option>
-            </select>
-          </div>
-        </div>
-        <Button
-          onClick={() => onRunCorrelations(selectedCorrelationType, selectedDataset1, selectedDataset2, selectedCorrelationCountry)}
-          disabled={correlationsLoading || !selectedCorrelationCountry}
-          className="w-full"
-          size="sm"
-        >
-          {correlationsLoading ? 'Finding...' : 'Find Correlations'}
-        </Button>
-        {correlationsError && (
-          <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200">
-            {correlationsError}
-          </div>
-        )}
-
-        {/* Correlation Results */}
-        {correlationsResults && correlationsResults.length > 0 && (
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-medium">Select pairs to chart:</Label>
-              {onAddSelectedCorrelationCharts && (
-                <Button
-                  onClick={onAddSelectedCorrelationCharts}
-                  disabled={!selectedCorrelationPairs || selectedCorrelationPairs.size === 0}
-                  size="sm"
-                  variant="outline"
-                  className="text-xs h-6 px-2"
-                >
-                  Add ({selectedCorrelationPairs?.size || 0})
-                </Button>
-              )}
-            </div>
-            <div className="max-h-48 overflow-y-auto space-y-1">
-              {correlationsResults.map((corr, index) => {
-                const fullText = `${getDisplayName(corr.indexA)} vs ${getDisplayName(corr.indexB)}`;
-                return (
-                  <div key={index} className="flex items-center gap-2 p-2 rounded border border-border/50 bg-background/30">
-                    <Checkbox
-                      id={`corr-${index}`}
-                      checked={selectedCorrelationPairs?.has(index) || false}
-                      onCheckedChange={() => onToggleCorrelationPair?.(index)}
-                      className="h-3 w-3"
-                    />
-                    <UiTooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <label
-                          htmlFor={`corr-${index}`}
-                          className="text-xs cursor-pointer flex-1 truncate"
-                        >
-                          {fullText}
-                        </label>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-xs">
-                        <p className="text-sm">{fullText}</p>
-                      </TooltipContent>
-                    </UiTooltip>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Explain Correlations Button */}
-      {onExplainCorrelations && (
-        <div className="mt-3 pt-3 border-t border-border/50">
-          <Button
-            size="sm"
-            variant="default"
-            aria-busy={explaining}
-            disabled={!(selectedForExplain && selectedForExplain.length === 2 && currentQuery.countries.length > 0) || explaining}
-            onClick={onExplainCorrelations}
-            className="w-full"
-            title={currentQuery.countries[0] ? `Using ${COUNTRIES.find(c => c.id === currentQuery.countries[0])?.name || currentQuery.countries[0]}` : 'Select a country to enable'}
-          >
-            {explaining ? (
-              <span className="inline-flex items-center gap-2">
-                <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
-                Explaining...
-              </span>
-            ) : (
-              'Explain Correlations'
-            )}
-          </Button>
         </div>
       )}
-    </div>
-  )}
+      
+  {/* Explain Correlations moved to top; full-width with tooltip on hover */}
+  {explainControls && (
+        <div className="mb-3">
+          <UiTooltip>
+            <TooltipTrigger asChild>
+              {React.isValidElement(explainControls)
+                ? (() => {
+                    const el = explainControls as React.ReactElement<{ className?: string; disabled?: boolean }>;
+                    const isDisabled = !!el.props?.disabled;
+                    const cloned = React.cloneElement(el, {
+                      className: cn('w-full justify-center', el.props?.className),
+                    });
+                    return (
+                      <span className="block w-full" tabIndex={0} aria-disabled={isDisabled}>
+                        {cloned}
+                      </span>
+                    );
+                  })()
+                : <span className="block w-full">{explainControls}</span>}
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <div className="max-w-xs">
+                Choose two charts by clicking their cards. Then click "Explain Correlations" to generate short explanations comparing their relationship for your selected countries.
+              </div>
+            </TooltipContent>
+          </UiTooltip>
+        </div>
+      )}
+      
+
 
   {/* Measures: dataset menus moved to top (labels removed) */}
   <div className="space-y-2 mb-4">
@@ -837,7 +935,7 @@ export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, onRu
             onKeyDown={onMeasureSearchKeyDown}
           />
           {showSuggestions && filteredSuggestions.length > 0 && (
-            <div className="absolute z-10 mt-1 w-full max-h-64 overflow-auto rounded-md border border-border bg-popover shadow">
+            <div className="absolute z-10 mt-1 w-full max-h-64 overflow-auto rounded-md bg-popover shadow">
               <ul className="divide-y divide-border">
                 {filteredSuggestions.map((s, idx) => (
                   <li key={`${s.dataset}-${s.code}-${idx}`}>
@@ -846,7 +944,7 @@ export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, onRu
                       className="w-full text-left px-3 py-2 hover:bg-muted flex items-start gap-2"
                       onClick={() => selectSuggestion(s)}
                     >
-                      <span className="text-xs rounded px-1 py-0.5 border border-border">
+                      <span className="text-xs rounded px-1 py-0.5">
                         {s.dataset === 'vdem' ? 'V-Dem' : 'IMF'}
                       </span>
                       <div className="min-w-0">
@@ -872,7 +970,7 @@ export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, onRu
   {/* Selected measures: pills removed; removal now via chart remove buttons */}
 
         <div
-          className="rounded-md border border-border p-1"
+          className="rounded-md p-1"
           role="tree"
           aria-label="Measures"
           onKeyDownCapture={handleTreeKeyDown}
@@ -1166,32 +1264,32 @@ export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, onRu
         </div>
       </div>
   {/* Selected countries as removable buttons */}
-      <div className="mb-2">
-        <div className="flex items-center justify-between mb-1">
+      <div className="mb-3">
+        <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-medium">Selected countries</div>
           <button
             type="button"
             aria-expanded={!countriesCollapsed}
             onClick={() => setCountriesCollapsed((s) => !s)}
-            className="text-xs text-muted-foreground"
+            className="text-xs text-muted-foreground hover:text-foreground"
           >
             {countriesCollapsed ? 'Show Countries' : 'Hide Countries'}
           </button>
         </div>
-        <div className="flex flex-wrap gap-2 mb-2">
+        <div className="flex flex-wrap gap-1.5">
           {currentQuery.countries.length === 0 ? (
             <div className="text-sm text-muted-foreground">No countries selected</div>
           ) : (
             currentQuery.countries.map((id) => {
               const c = COUNTRIES.find(c => c.id === id);
               return (
-                <div key={id} className="inline-flex items-center gap-2 rounded-md border border-border px-2 py-1 text-xs bg-card">
+                <div key={id} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs bg-muted/50 hover:bg-muted">
                   <span>{c?.name || id}</span>
                   <button
                     type="button"
                     onClick={() => removeCountry(id)}
                     aria-label={`Remove ${c?.name || id}`}
-                    className="ml-1 text-muted-foreground hover:text-foreground"
+                    className="text-muted-foreground hover:text-foreground"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -1210,15 +1308,15 @@ export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, onRu
               value={countrySearch}
               onChange={(e) => setCountrySearch(e.target.value)}
             />
-            <div className="mt-1 max-h-40 overflow-auto rounded-md border border-border p-2">
+            <div className="mt-2 max-h-40 overflow-auto">
               {filteredCountries.map((c) => (
-                <div key={c.id} className="flex items-center gap-2 py-1">
+                <div key={c.id} className="flex items-center gap-2 py-1.5 hover:bg-muted/50 rounded px-1">
                   <Checkbox
                     id={`country-${c.id}`}
                     checked={currentQuery.countries.includes(c.id)}
                     onCheckedChange={() => toggleCountry(c.id)}
                   />
-                  <label htmlFor={`country-${c.id}`} className="text-sm cursor-pointer">
+                  <label htmlFor={`country-${c.id}`} className="text-sm cursor-pointer flex-1">
                     {c.name}
                   </label>
                 </div>
@@ -1227,40 +1325,20 @@ export function ChartSidebar({ currentQuery, onQueryChange, registerReveal, onRu
           </>
         )}
 
-  {/* Time Period (label removed) */}
-  <div className="space-y-2 mb-4">
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <Label htmlFor="from" className="text-xs">From</Label>
-            <Input
-              id="from"
-              type="number"
-              min={1800}
-              max={new Date().getFullYear()}
-              value={fromYearInput}
-              onChange={(e) => setFromYearInput(e.target.value)}
-              onBlur={() => commitYear('startYear', fromYearInput)}
-              onKeyDown={(e) => { if (e.key === 'Enter') commitYear('startYear', fromYearInput); }}
-            />
-          </div>
-          <div>
-            <Label htmlFor="to" className="text-xs">To</Label>
-            <Input
-              id="to"
-              type="number"
-              min={1800}
-              max={new Date().getFullYear()}
-              value={toYearInput}
-              onChange={(e) => setToYearInput(e.target.value)}
-              onBlur={() => commitYear('endYear', toYearInput)}
-              onKeyDown={(e) => { if (e.key === 'Enter') commitYear('endYear', toYearInput); }}
-            />
-          </div>
-        </div>
+  {/* Time Period */}
+  <div className="mb-4">
+    <YearRangeSlider
+      startYear={currentQuery.startYear}
+      endYear={currentQuery.endYear}
+      onStartYearChange={(year) => commitYear('startYear', year.toString())}
+      onEndYearChange={(year) => commitYear('endYear', year.toString())}
+      min={1900}
+      max={new Date().getFullYear()}
+    />
   {/* Explain controls moved to top */}
       </div>
 
-
+      
     </div>
   );
 }

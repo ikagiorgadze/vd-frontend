@@ -1,5 +1,7 @@
 // Variable name to code mappings for the V-Dem API
 // 1) Start with the existing curated base mapping (kept for stability)
+import { IMF_WEO_CODE_TO_DESC, IMF_NEA_CODE_TO_DESC } from './imf-codes';
+import { VDEM_VARIABLES } from './variables';
 const BASE_MAPPING: Record<string, string> = {
   // V-Dem High-Level Democracy Indices
   "Electoral democracy index": "v2x_polyarchy",
@@ -356,5 +358,25 @@ export function getVariableCode(variableName: string): string | undefined {
 export function getVariableName(code: string): string | undefined {
   if (VARIABLE_CODE_TO_NAME[code]) return VARIABLE_CODE_TO_NAME[code];
   if (VARIABLE_NAME_TO_CODE[code]) return code;
+  if (IMF_WEO_CODE_TO_DESC[code]) return IMF_WEO_CODE_TO_DESC[code];
+  if (IMF_NEA_CODE_TO_DESC[code]) return IMF_NEA_CODE_TO_DESC[code];
   return undefined;
+}
+
+// Utility function to get display name for any variable (V-Dem or IMF)
+export function getVariableDisplayName(code: string): string {
+  // First try V-Dem variables
+  const vdemVar = VDEM_VARIABLES.find(v => v.id === code);
+  if (vdemVar) return vdemVar.label;
+
+  // Then try IMF mappings
+  if (IMF_WEO_CODE_TO_DESC[code]) return IMF_WEO_CODE_TO_DESC[code];
+  if (IMF_NEA_CODE_TO_DESC[code]) return IMF_NEA_CODE_TO_DESC[code];
+
+  // Finally try the variable name mapping
+  const name = getVariableName(code);
+  if (name) return name;
+
+  // Fallback to the code itself
+  return code;
 }

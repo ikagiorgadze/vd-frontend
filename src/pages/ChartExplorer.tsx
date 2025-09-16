@@ -1,9 +1,8 @@
-import { getDisplayName } from '@/lib/utils';
 import { IMF_WEO_CODE_TO_DESC, IMF_NEA_CODE_TO_DESC } from '@/lib/imf-codes';
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Download, Link2, Filter, X, ChevronDown } from 'lucide-react';
+import { Download, Link2, Filter, X, ChevronDown, HelpCircle } from 'lucide-react';
 import { Tooltip as UiTooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import HelpIcon from '@/components/ui/help-icon';
 import { Button } from '@/components/ui/button';
@@ -14,7 +13,10 @@ import { fetchVDemData, VDemDataPoint } from '@/lib/data';
 import { getVariableById } from '@/lib/variables';
 import { getCountryById } from '@/lib/countries';
 import { QueryState, stateToUrlParams } from '@/lib/url-state';
-import { apiService, CorrelationType, DatasetType, CorrelationResult } from '@/lib/api';
+import { getVariableDisplayName } from '@/lib/variable-codes';
+import { apiService } from '@/lib/api';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faLink, faLinkSlash } from '@fortawesome/free-solid-svg-icons';
 
 
 type ChartExplorerProps = {
@@ -39,11 +41,10 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
   // Multiple explanations by country
   const [explanationsByCountry, setExplanationsByCountry] = useState<Record<string, string> | null>(null);
   const [showExplainOverlay, setShowExplainOverlay] = useState(false);
-  // Correlations state
-  const [correlationsLoading, setCorrelationsLoading] = useState(false);
-  const [correlationsResults, setCorrelationsResults] = useState<CorrelationResult[] | null>(null);
-  const [correlationsError, setCorrelationsError] = useState<string | null>(null);
-  const [selectedCorrelationPairs, setSelectedCorrelationPairs] = useState<Set<number>>(new Set());
+  // Chart pairing state
+  const [chartPairs, setChartPairs] = useState<Map<string, string[]>>(new Map()); // pairId -> [var1, var2]
+  const [pairIdCounter, setPairIdCounter] = useState(0);
+  const [selectedForPairing, setSelectedForPairing] = useState<Set<string>>(new Set());
   // Picker for choosing up to 3 countries when more than 3 are selected
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [pickerCountries, setPickerCountries] = useState<string[]>([]);
@@ -51,18 +52,13 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
   const gridRef = useRef<HTMLDivElement | null>(null);
   // Mobile viewport detection to adjust chart heights
   const [isMobileViewport, setIsMobileViewport] = useState(false);
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(max-width: 639px)');
-    const onChange = (e: MediaQueryListEvent) => setIsMobileViewport(e.matches);
-    setIsMobileViewport(mq.matches);
-    if (mq.addEventListener) mq.addEventListener('change', onChange);
-    else mq.addListener(onChange as unknown as (this: MediaQueryList, ev: MediaQueryListEvent) => void);
-    return () => {
-      if (mq.removeEventListener) mq.removeEventListener('change', onChange);
-      else mq.removeListener(onChange as unknown as (this: MediaQueryList, ev: MediaQueryListEvent) => void);
-    };
-  }, []);
+  // Pending query changes state
+  const [appliedQuery, setAppliedQuery] = useState<QueryState>(currentQuery);
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
+  // Position/size for the fixed pending-changes banner to match charts width & left and sit below header
+  const [bannerRect, setBannerRect] = useState<{ left: number; width: number; top: number } | null>(null);
+  const bannerRef = useRef<HTMLDivElement | null>(null);
+  const [bannerHeight, setBannerHeight] = useState<number>(0);
   // Refs for FLIP animations (smooth reflow when layout/selection changes)
   const tileRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const prevRectsRef = useRef<Record<string, DOMRect>>({});
@@ -82,9 +78,9 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
   useEffect(() => {
     let cancelled = false;
     const loadData = async () => {
-      const vars = (currentQuery.variables && currentQuery.variables.length > 0)
-        ? currentQuery.variables
-        : (currentQuery.variable ? [currentQuery.variable] : []);
+      const vars = (appliedQuery.variables && appliedQuery.variables.length > 0)
+        ? appliedQuery.variables
+        : (appliedQuery.variable ? [appliedQuery.variable] : []);
       if (vars.length === 0) {
         setDataByVar({});
         setChartDataByVar({});
@@ -92,18 +88,18 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
         return;
       }
 
-  setLoading(true);
-  // Clear previous data to avoid stale charts flashing during new requests
-  setDataByVar({});
-  setChartDataByVar({});
+      setLoading(true);
+      // Clear previous data to avoid stale charts flashing during new requests
+      setDataByVar({});
+      setChartDataByVar({});
       try {
         const pairs = await Promise.all(
           vars.map(async (v) => {
             const result = await fetchVDemData(
-              currentQuery.countries,
+              appliedQuery.countries,
               v,
-              currentQuery.startYear,
-              currentQuery.endYear
+              appliedQuery.startYear,
+              appliedQuery.endYear
             );
             return [v, result] as const;
           })
@@ -120,7 +116,7 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
               const years = [...new Set(arr.map(d => d.year))].sort();
               const transformed: ChartRow[] = years.map(year => {
                 const yearData: ChartRow = { year } as ChartRow;
-                currentQuery.countries.forEach(countryId => {
+                appliedQuery.countries.forEach(countryId => {
                   const dataPoint = arr.find(d => d.year === year && d.country === countryId);
                   yearData[countryId] = dataPoint?.value ?? null;
                 });
@@ -148,17 +144,23 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
       cancelled = true;
     };
   }, [
-    currentQuery.variable,
-    currentQuery.variables,
-    currentQuery.countries,
-    currentQuery.startYear,
-    currentQuery.endYear
+    appliedQuery.variable,
+    appliedQuery.variables,
+    appliedQuery.countries,
+    appliedQuery.startYear,
+    appliedQuery.endYear
   ]);
 
-  const handleQueryUpdate = (newQuery: QueryState) => {
-    onQueryChange(newQuery);
-    const params = stateToUrlParams(newQuery);
-    setSearchParams(params);
+  // Detect pending changes
+  useEffect(() => {
+    const hasChanges = JSON.stringify(currentQuery) !== JSON.stringify(appliedQuery);
+    setHasPendingChanges(hasChanges);
+  }, [currentQuery, appliedQuery]);
+
+  // Apply pending changes
+  const applyChanges = () => {
+    setAppliedQuery(currentQuery);
+    setHasPendingChanges(false);
   };
 
   // Selected variables (unlimited)
@@ -220,6 +222,78 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
     // Store for next cycle
     prevRectsRef.current = currentRects;
   }, [unifiedVars]);
+
+  // Measure charts grid rect for aligning the fixed banner to charts width & left
+  useEffect(() => {
+    let rafId: number | null = null;
+    const computeRect = () => {
+      const el = gridRef.current;
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      // Clamp to viewport horizontally to avoid overflow
+      const margin = 8; // px safety margin on very small screens
+      const maxWidth = Math.max(0, window.innerWidth - margin * 2);
+      const width = Math.min(rect.width, maxWidth);
+      // If we clamp width, ensure left also respects margin
+      const left = Math.max(margin, Math.min(rect.left, window.innerWidth - margin - width));
+      // Compute top offset just below the global header (if present)
+      let top = 16; // fallback spacing
+      const header = document.querySelector('header.bg-card') as HTMLElement | null;
+      if (header) {
+        const hRect = header.getBoundingClientRect();
+        top = Math.max(16, Math.floor(hRect.bottom + 8));
+      }
+      // Round left/width to whole pixels to avoid jitter
+      return { left: Math.round(left), width: Math.round(width), top };
+    };
+
+    const update = () => {
+      if (rafId != null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        const next = computeRect();
+        if (!next) return;
+        setBannerRect(prev => {
+          if (!prev || prev.left !== next.left || prev.width !== next.width || prev.top !== next.top) {
+            return next;
+          }
+          return prev;
+        });
+      });
+    };
+
+    // Initial measure
+    update();
+    const ro = new ResizeObserver(() => update());
+    if (gridRef.current) ro.observe(gridRef.current);
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, { passive: true });
+    return () => {
+      if (rafId != null) cancelAnimationFrame(rafId);
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update);
+    };
+  }, []);
+
+  // Measure banner height to reserve space between header and charts so the banner doesn’t cover charts initially
+  useLayoutEffect(() => {
+    if (!hasPendingChanges) {
+      setBannerHeight(0);
+      return;
+    }
+    const el = bannerRef.current;
+    if (!el) return;
+    const applyHeight = () => setBannerHeight(el.offsetHeight || 0);
+    applyHeight();
+    const ro = new ResizeObserver(() => applyHeight());
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+    };
+  }, [hasPendingChanges, bannerRect?.width]);
+
+  // (Reverted FLIP transform animation for stability)
 
   // DEBUG: Show selectedVars for troubleshooting
   // Remove this after confirming multi-chart works
@@ -361,9 +435,10 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
     return <article>{blocks}</article>;
   }
 
-  async function runExplainForCountries(countries: string[]) {
-    if (selectedForExplain.length !== 2 || countries.length === 0) return;
-    const [indexA, indexB] = selectedForExplain;
+  async function runExplainForCountries(countries: string[], variables?: string[]) {
+    const varsToUse = variables || selectedForExplain;
+    if (varsToUse.length < 2 || countries.length === 0) return;
+    const [indexA, indexB] = varsToUse.slice(0, 2);
     setExplaining(true);
     setExplainError(null);
     setExplanationsByCountry(null);
@@ -413,74 +488,84 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
     }
   }
 
-  async function runCorrelations(type: CorrelationType, dataset1: DatasetType, dataset2: DatasetType, country: string) {
-    setCorrelationsLoading(true);
-    setCorrelationsError(null);
-    setCorrelationsResults(null);
-    setSelectedCorrelationPairs(new Set());
-    try {
-      const results = await apiService.getCorrelations({
-        country,
-        type,
-        dataset1,
-        dataset2,
-        limit: 10, // Show more options for user to choose from
-      });
-      setCorrelationsResults(results.correlations);
-      // No longer showing overlay - results appear in sidebar
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Failed to fetch correlations';
-      setCorrelationsError(msg);
-    } finally {
-      setCorrelationsLoading(false);
-    }
+  async function runCorrelations(dataset1: string, dataset2: string, country: string) {
+    // Correlation functionality not implemented yet
+    console.log('Correlations not implemented:', { dataset1, dataset2, country });
   }
 
   function addSelectedCorrelationCharts() {
-    if (!correlationsResults) return;
-
-    const newVars = [...selectedVars];
-    const selectedIndices = Array.from(selectedCorrelationPairs);
-
-    selectedIndices.forEach(index => {
-      const corr = correlationsResults[index];
-      const indexA = corr.indexA.split(':')[1];
-      const indexB = corr.indexB.split(':')[1];
-      if (!newVars.includes(indexA)) newVars.push(indexA);
-      if (!newVars.includes(indexB)) newVars.push(indexB);
-    });
-
-    if (newVars.length > selectedVars.length) {
-      const next: QueryState = { ...currentQuery };
-      next.variables = newVars;
-      next.variable = newVars[0];
-      handleQueryUpdate(next);
-    }
-
-    // Clear results after adding charts
-    setCorrelationsResults(null);
-    setSelectedCorrelationPairs(new Set());
+    // Correlation functionality not implemented yet
+    console.log('Adding correlation charts not implemented');
   }
 
   function toggleCorrelationPair(index: number) {
-    const newSelected = new Set(selectedCorrelationPairs);
-    if (newSelected.has(index)) {
-      newSelected.delete(index);
-    } else {
-      newSelected.add(index);
-    }
-    setSelectedCorrelationPairs(newSelected);
+    // Correlation functionality not implemented yet
+    console.log('Toggling correlation pair not implemented:', index);
   }
 
-  async function handleExplainCorrelations() {
-    if (selectedForExplain.length !== 2 || currentQuery.countries.length === 0) return;
-    const selected = currentQuery.countries;
-    if (selected.length <= 3) {
-      await runExplainForCountries(selected);
-    } else {
-      setPickerCountries(selected.slice(0, 3));
-      setShowCountryPicker(true);
+  // Chart pairing functions
+  function createChartPair(var1: string, var2: string) {
+    const pairId = `pair-${pairIdCounter}`;
+    setChartPairs(prev => new Map(prev).set(pairId, [var1, var2]));
+    setPairIdCounter(prev => prev + 1);
+    return pairId;
+  }
+
+  function removeChartPair(pairId: string) {
+    const pair = chartPairs.get(pairId);
+    setChartPairs(prev => {
+      const newPairs = new Map(prev);
+      newPairs.delete(pairId);
+      return newPairs;
+    });
+    // Also remove from selected pairs for explanation
+    if (pair) {
+      setSelectedForExplain(prev => prev.filter(x => !pair.includes(x)));
     }
+  }
+
+  function isVariablePaired(variable: string): string | null {
+    for (const [pairId, vars] of chartPairs.entries()) {
+      if (vars.includes(variable)) {
+        return pairId;
+      }
+    }
+    return null;
+  }
+
+  function getPairedVariables(variable: string): string[] {
+    const pairId = isVariablePaired(variable);
+    return pairId ? chartPairs.get(pairId) || [] : [variable];
+  }
+
+  function toggleChartPairing(variable: string) {
+    const newSelected = new Set(selectedForPairing);
+    
+    if (newSelected.has(variable)) {
+      // Deselect if already selected
+      newSelected.delete(variable);
+    } else if (newSelected.size === 0) {
+      // Select first chart
+      newSelected.add(variable);
+    } else if (newSelected.size === 1) {
+      // Pair with second chart
+      const [firstVar] = Array.from(newSelected);
+      if (firstVar !== variable) {
+        // If the variable is already paired, unpair it first
+        const existingPairId = isVariablePaired(variable);
+        if (existingPairId) {
+          removeChartPair(existingPairId);
+        }
+        const firstPairId = isVariablePaired(firstVar);
+        if (firstPairId) {
+          removeChartPair(firstPairId);
+        }
+        createChartPair(firstVar, variable);
+      }
+      newSelected.clear();
+    }
+    
+    setSelectedForPairing(newSelected);
   }
 
   const handleDownloadCSVFor = (variableCode: string, rows: ChartRow[]) => {
@@ -541,18 +626,15 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
       next.variables = undefined;
       next.variable = undefined;
     }
-    handleQueryUpdate(next);
+    onQueryChange(next); // Don't update URL for chart removal
   };
 
   // (moved up) Helper classification and unifiedVars construction
 
   // Renderer for a single chart card (kept identical to previous rendering for behavior parity)
-  const renderChartCard = (v: string) => {
+  const renderChartCard = (v: string, isPaired: boolean = false, isInPairContainer: boolean = false) => {
     const variableMeta = getVariableById(v);
-    const variableLabel =
-      variableMeta?.label ||
-      getDisplayName(v) ||
-      v;
+    const variableLabel = getVariableDisplayName(v);
     const variableScale = variableMeta?.scale ?? '';
     const variableUnit = variableMeta?.unit;
     // Append WEO/IMF suffix for chart titles when applicable
@@ -580,33 +662,70 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
     const safeVarId = v.replace(/[^a-zA-Z0-9_-]/g, '-');
   const clipId = `reveal-${safeVarId}-${animateKey}`;
   const drawAnimName = `draw-${safeVarId}-${animateKey}`;
-    const selected = selectedForExplain.includes(v);
     return (
       <div
         key={v}
         role="button"
         tabIndex={0}
         onClick={() => {
-          setSelectedForExplain(prev => {
-            const exists = prev.includes(v);
-            if (exists) return prev.filter(x => x !== v);
-            if (prev.length >= 2) return [prev[1], v];
-            return [...prev, v];
-          });
+          if (isMobileViewport && !isInPairContainer) {
+            toggleChartPairing(v);
+          }
+          // Individual charts are no longer selectable for explanation
         }}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedForExplain(prev => prev.includes(v) ? prev.filter(x => x !== v) : (prev.length >= 2 ? [prev[1], v] : [...prev, v])); } }}
-  className={`relative bg-card border rounded-xl p-2 sm:p-3 box-border mx-auto w-full h-full flex flex-col ${selected ? 'border-success-green ring-2 ring-inset ring-success-green/50' : 'border-border hover:border-muted'}`}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (isMobileViewport && !isInPairContainer) {
+              toggleChartPairing(v);
+            }
+            // Individual charts are no longer selectable for explanation
+          }
+        }}
+  className={`relative ${isInPairContainer ? 'bg-transparent border-0 p-0' : isPaired ? 'bg-blue-50/50 dark:bg-blue-950/10' : 'bg-card'} ${!isInPairContainer ? `border rounded-xl ${isMobileViewport ? 'py-2 px-1' : 'p-2 sm:p-3'} box-border mx-auto w-full h-full` : 'w-full h-full'} flex flex-col ${!isInPairContainer ? `border-border hover:border-muted ${selectedForPairing.has(v) && isMobileViewport ? 'bg-green-500/20' : selectedForPairing.has(v) && !isMobileViewport ? 'ring-2 ring-green-500 border-green-500' : ''}` : ''}`}
       >
-        {/* Remove chart button */}
-        <button
-          type="button"
-          aria-label="Remove chart"
-          title="Remove chart"
-          onClick={(e) => { e.stopPropagation(); removeChart(v); }}
-          className="absolute top-2 right-2 inline-flex items-center justify-center h-7 w-7 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        {/* Remove chart button - only show when not in pair container */}
+        {!isInPairContainer && (
+          <button
+            type="button"
+            aria-label="Remove chart"
+            title="Remove chart"
+            onClick={(e) => { e.stopPropagation(); removeChart(v); }}
+            className="absolute top-2 right-2 inline-flex items-center justify-center h-7 w-7 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+        {/* Pair chart button - only show when not in pair container and not mobile */}
+        {!isInPairContainer && !isMobileViewport && (
+          <button
+            type="button"
+            aria-label="Pair chart"
+            title="Pair chart"
+            onClick={(e) => { e.stopPropagation(); toggleChartPairing(v); }}
+            className={`absolute bottom-1 right-1 inline-flex items-center justify-center rounded-md border text-muted-foreground hover:text-white ${
+              selectedForPairing.has(v) 
+                ? 'bg-green-500 text-white border-green-500 hover:bg-green-600' 
+                : 'border-border hover:bg-green-500 hover:border-green-500'
+            } ${isMobileViewport ? 'h-9 w-9' : 'h-7 w-7'}`}
+          >
+            <FontAwesomeIcon icon={faLink} className={`${isMobileViewport ? 'h-4 w-4' : 'h-4 w-4'}`} />
+          </button>
+        )}
+        {/* Unpair button for paired charts - only show when not in pair container */}
+        {isPaired && !isInPairContainer && (
+          <button
+            type="button"
+            aria-label="Unpair chart"
+            title="Unpair chart"
+            onClick={(e) => { e.stopPropagation(); removeChartPair(isVariablePaired(v)!); }}
+            className={`absolute bottom-1 right-1 inline-flex items-center justify-center rounded-md border border-border text-muted-foreground hover:text-white hover:bg-red-500 hover:border-red-500 ${
+              isMobileViewport ? 'h-9 w-9' : 'h-7 w-7'
+            }`}
+          >
+            <FontAwesomeIcon icon={faLinkSlash} className={`${isMobileViewport ? 'h-4 w-4' : 'h-4 w-4'}`} />
+          </button>
+        )}
         <div className="mb-1.5 shrink-0">
           <h2 className="text-base font-semibold">
             <button
@@ -629,7 +748,10 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
         ) : rows.length > 0 ? (
           <div className="flex-1 min-h-0">
               <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={rows}>
+            <LineChart 
+              data={rows}
+              margin={isMobileViewport ? { top: 5, right: 5, bottom: 5, left: 5 } : { top: 5, right: 30, bottom: 5, left: 20 }}
+            >
               <defs>
                 {/* CSS keyframes injected into SVG for reliable stroke-dashoffset animation */}
                 <style>{`
@@ -661,7 +783,10 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
                   return (
                     <YAxis 
                       stroke="hsl(var(--muted-foreground))"
+                      width={isMobileViewport ? 0 : undefined}
+                      tick={!isMobileViewport}
                       tickFormatter={(value) => {
+                        if (isMobileViewport) return '';
                         if (value === null) return 'N/A';
                         if (variableUnit === '%') return `${(value as number).toFixed(1)}%`;
                         if ((variableScale || '').includes('0-1')) return (value as number).toFixed(3);
@@ -692,7 +817,10 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
                   <YAxis 
                     stroke="hsl(var(--muted-foreground))"
                     domain={[minDomain, maxDomain]}
+                    width={isMobileViewport ? 0 : undefined}
+                    tick={!isMobileViewport}
                     tickFormatter={(value) => {
+                      if (isMobileViewport) return '';
                       if (value === null) return 'N/A';
                       if (variableUnit === '%') return `${(value as number).toFixed(1)}%`;
                       if ((variableScale || '').includes('0-1')) return (value as number).toFixed(3);
@@ -777,22 +905,24 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
             No data available for the selected range.
           </div>
         )}
-        {/* Actions for each variable */}
-        <div className="flex items-center gap-2 pt-2 border-t border-border mt-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-          <Button variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={(e) => { e.stopPropagation(); handleDownloadCSVFor(v, rows); }}>
-            <Download className="h-4 w-4 mr-1" />
-            Download CSV
-          </Button>
-          <Button
-            variant={copiedVar === v ? 'default' : 'outline'}
-            size="sm"
-            className={`h-8 px-2 text-xs ${copiedVar === v ? 'bg-success-green text-white border-success-green' : ''}`}
-            onClick={(e) => { e.stopPropagation(); handleShareLink(v); }}
-          >
-            <Link2 className="h-4 w-4 mr-1" />
-            {copiedVar === v ? 'Copied' : 'Copy Share Link'}
-          </Button>
-        </div>
+        {/* Actions for each variable - only show when not in pair container */}
+        {!isInPairContainer && !isMobileViewport && (
+          <div className="flex items-center gap-2 pt-2 border-t border-border mt-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <Button variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={(e) => { e.stopPropagation(); handleDownloadCSVFor(v, rows); }}>
+              <Download className="h-4 w-4 mr-1" />
+              Download CSV
+            </Button>
+            <Button
+              variant={copiedVar === v ? 'default' : 'outline'}
+              size="sm"
+              className={`h-8 px-2 text-xs ${copiedVar === v ? 'bg-muted text-foreground border-border' : ''}`}
+              onClick={(e) => { e.stopPropagation(); handleShareLink(v); }}
+            >
+              <Link2 className="h-4 w-4 mr-1" />
+              {copiedVar === v ? 'Copied' : 'Copy Share Link'}
+            </Button>
+          </div>
+        )}
       </div>
     );
   };
@@ -802,41 +932,17 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_360px] gap-0 p-4 h-full overflow-hidden min-h-0">
         {/* Left: Chart area fills all space up to the sidebar */}
         <div className="pr-0 sm:pr-4 min-h-0 h-full overflow-hidden relative">
-          {/* Mobile-only top bar: Explain (left) and Filters (right) */}
-          <div className="flex items-center justify-between mb-3 sm:hidden">
+          {/* Mobile filter button - floating action button style */}
+          <div className="sm:hidden fixed bottom-32 right-6 z-40">
             <Button
+              variant="outline"
               size="sm"
-              variant="default"
-              aria-busy={explaining}
-              disabled={!(selectedForExplain.length === 2 && currentQuery.countries.length > 0) || explaining}
-              onClick={async () => {
-                if (selectedForExplain.length !== 2 || currentQuery.countries.length === 0) return;
-                const selected = currentQuery.countries;
-                if (selected.length <= 3) {
-                  await runExplainForCountries(selected);
-                } else {
-                  setPickerCountries(selected.slice(0, 3));
-                  setShowCountryPicker(true);
-                }
-              }}
-              title={currentQuery.countries[0] ? `Using ${getCountryById(currentQuery.countries[0])?.name || currentQuery.countries[0]}` : 'Select a country to enable'}
+              onClick={() => setMobileFiltersOpen(true)}
+              className="h-12 w-12 rounded-full shadow-lg bg-background/95 backdrop-blur-sm border-2"
             >
-              {explaining ? (
-                <span className="inline-flex items-center gap-2">
-                  <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
-                  Explaining...
-                </span>
-              ) : (
-                'Explain'
-              )}
-            </Button>
-
-            <Button variant="outline" size="sm" onClick={() => setMobileFiltersOpen(true)}>
-              <Filter className="h-4 w-4 mr-2" />
-              Filters
+              <Filter className="h-5 w-5" />
             </Button>
           </div>
-
           {selectedVars.length === 0 ? (
             <div className="h-96 flex items-center justify-center border border-border rounded-xl">
               <div className="text-center">
@@ -846,28 +952,214 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
             </div>
           ) : (
             <div className="flex flex-col h-full min-h-0">
-              {/* Explain Correlations button moved into sidebar; no CTA here */}
+              {/* Pending changes notification and apply button */}
+              {/* Pending changes banner: fixed to follow the entire page (no layout spacer) */}
+              {hasPendingChanges && (
+        <div
+                  ref={bannerRef}
+                  className="fixed z-40 p-4 bg-muted/60 dark:bg-muted/40 border border-border/40 rounded-lg shadow-lg backdrop-blur supports-[backdrop-filter]:bg-muted/40"
+                  style={{
+                    top: bannerRect?.top ?? 16,
+                    left: bannerRect?.left ?? 16,
+                    width: bannerRect?.width ?? undefined,
+                    transition: 'left 220ms cubic-bezier(0.2, 0.8, 0.2, 1), width 220ms cubic-bezier(0.2, 0.8, 0.2, 1), top 220ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+                    willChange: 'left, width, top',
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-primary">Menu selections updated</h3>
+                      <p className="text-xs text-muted-foreground mt-1">Apply changes to load new data and update charts</p>
+                    </div>
+                    <Button onClick={applyChanges} size="sm" className="bg-primary hover:bg-primary/90">Apply Changes</Button>
+                  </div>
+                </div>
+              )}
+
               {/* Grid of charts: responsive layout - single chart full width, multiple charts side by side */}
               <div className="flex-1 min-h-0">
+                {/* Spacer so the fixed banner doesn’t overlap charts initially */}
+                {hasPendingChanges && bannerHeight > 0 && (
+                  <div aria-hidden style={{ height: bannerHeight }} />
+                )}
                 <div
                   ref={gridRef}
                   className={`grid gap-3 h-full overflow-y-auto min-h-0 ${
-                    unifiedVars.length === 1 
+                    isMobileViewport || unifiedVars.length === 1 
                       ? 'grid-cols-1' 
                       : 'grid-cols-2'
                   }`}
                   style={{ gridAutoRows: isMobileViewport ? '320px' : (unifiedVars.length === 1 ? '630px' : '420px') }}
                 >
-          {unifiedVars.map((v) => (
-                    <div
-                      key={`cell-${v}`}
-                      ref={(el) => { tileRefs.current[v] = el; }}
-                      className="min-h-0 will-change-transform [contain:content]"
-                      style={{ height: '100%' }}
+          {(() => {
+            const renderedVars = new Set<string>();
+            const renderItems: JSX.Element[] = [];
+            
+            // First, render all paired charts
+            for (const [pairId, pairedVars] of chartPairs.entries()) {
+              const [var1, var2] = pairedVars;
+              
+              // Check if both variables exist in current variables
+              if (unifiedVars.includes(var1) && unifiedVars.includes(var2) && 
+                  !renderedVars.has(var1) && !renderedVars.has(var2)) {
+                
+                renderedVars.add(var1);
+                renderedVars.add(var2);
+                
+                renderItems.push(
+                  <div
+                    key={`pair-${pairId}`}
+                    className="min-h-0 will-change-transform [contain:content] relative"
+                    style={{ 
+                      height: isMobileViewport ? '640px' : '100%',
+                      gridColumn: isMobileViewport ? 'span 1' : 'span 2' // Single column on mobile, span 2 on desktop
+                    }}
+                  >
+                    <div 
+                      className="relative border rounded-xl p-2 sm:p-3 box-border mx-auto w-full h-full flex flex-col border-border"
+                      style={{ backgroundColor: 'rgba(0, 0, 0, 0.05)' }}
                     >
-                      {renderChartCard(v)}
+                      {/* Unpair button for mobile - positioned absolutely on the right */}
+                      {isMobileViewport && (
+                        <button
+                          type="button"
+                          aria-label="Unpair charts"
+                          title="Unpair charts"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeChartPair(pairId);
+                          }}
+                          className="absolute bottom-2 right-2 inline-flex items-center justify-center h-10 w-10 rounded-md border border-border text-muted-foreground hover:text-white hover:bg-red-500 hover:border-red-500 z-10"
+                        >
+                          <FontAwesomeIcon icon={faLinkSlash} className="h-4 w-4" />
+                        </button>
+                      )}
+                      {/* Charts container */}
+                      <div className={`${isMobileViewport ? 'flex flex-col' : 'flex'} flex-1 min-h-0`}>
+                        {/* Left chart */}
+                        <div className={`flex-1 ${isMobileViewport ? 'pb-2 border-b border-border' : 'pr-2 border-r border-border'}`}>
+                          {renderChartCard(var1, true, true)}
+                        </div>
+                        
+                        {/* Right chart */}
+                        <div className={`flex-1 ${isMobileViewport ? 'pt-2' : 'pl-2'}`}>
+                          {renderChartCard(var2, true, true)}
+                        </div>
+                      </div>
+                      
+                      {/* Bottom actions - positioned under respective charts */}
+                      <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border mt-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        {/* Left chart actions - aligned under left chart */}
+                        {!isMobileViewport && (
+                          <div className="flex items-center gap-2 pr-2">
+                            <Button 
+                              size="sm" 
+                              className="h-8 px-2 text-xs bg-muted text-foreground border-border hover:bg-white hover:text-foreground" 
+                              onClick={(e) => { e.stopPropagation(); handleDownloadCSVFor(var1, chartDataByVar[var1] || []); }}
+                            >
+                              <Download className="h-4 w-4 mr-1" />
+                              Download CSV
+                            </Button>
+                            <Button
+                              size="sm"
+                              className={`h-8 px-2 text-xs bg-muted text-foreground border-border hover:bg-white hover:text-foreground ${copiedVar === var1 ? 'bg-muted text-foreground border-border' : ''}`}
+                              onClick={(e) => { e.stopPropagation(); handleShareLink(var1); }}
+                            >
+                              <Link2 className="h-4 w-4 mr-1" />
+                              {copiedVar === var1 ? 'Copied' : 'Copy Share Link'}
+                            </Button>
+                          </div>
+                        )}
+                        
+                        {/* Right chart actions - aligned under right chart */}
+                        <div className="flex items-center justify-between gap-2 pl-2">
+                          {!isMobileViewport && (
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                size="sm" 
+                                className="h-8 px-2 text-xs bg-muted text-foreground border-border hover:bg-white hover:text-foreground" 
+                                onClick={(e) => { e.stopPropagation(); handleDownloadCSVFor(var2, chartDataByVar[var2] || []); }}
+                              >
+                                <Download className="h-4 w-4 mr-1" />
+                                Download CSV
+                              </Button>
+                              <Button
+                                size="sm"
+                                className={`h-8 px-2 text-xs bg-muted text-foreground border-border hover:bg-white hover:text-foreground ${copiedVar === var2 ? 'bg-muted text-foreground border-border' : ''}`}
+                                onClick={(e) => { e.stopPropagation(); handleShareLink(var2); }}
+                              >
+                                <Link2 className="h-4 w-4 mr-1" />
+                                {copiedVar === var2 ? 'Copied' : 'Copy Share Link'}
+                              </Button>
+                            </div>
+                          )}
+                          
+                          {/* Pair actions on the far right - always visible */}
+                          <div className={`flex items-center ${isMobileViewport ? 'justify-start w-full' : 'gap-2'}`}>
+                            <Button
+                              size="sm"
+                              className={`${isMobileViewport ? 'h-10 px-3 text-sm' : 'h-8 px-2 text-xs'} bg-muted text-foreground border-border hover:bg-white hover:text-foreground`}
+                              aria-label="Explain correlations"
+                              title="Explain correlations"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const pair = chartPairs.get(pairId);
+                                if (pair && currentQuery.countries.length > 0) {
+                                  const selected = currentQuery.countries;
+                                  if (selected.length <= 3) {
+                                    await runExplainForCountries(selected, pair);
+                                  } else {
+                                    setPickerCountries(selected.slice(0, 3));
+                                    setShowCountryPicker(true);
+                                  }
+                                }
+                              }}
+                              disabled={explaining}
+                            >
+                              <HelpCircle className="h-4 w-4 mr-1" />
+                              Explain Relationship
+                            </Button>
+                            {!isMobileViewport && (
+                              <button
+                                type="button"
+                                aria-label="Unpair charts"
+                                title="Unpair charts"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeChartPair(pairId);
+                                }}
+                                className="inline-flex items-center justify-center rounded-md border border-border text-muted-foreground hover:text-white hover:bg-red-500 hover:border-red-500 h-7 w-7"
+                              >
+                                <FontAwesomeIcon icon={faLinkSlash} className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  ))}
+                  </div>
+                );
+              }
+            }
+            
+            // Then render unpaired charts
+            unifiedVars.forEach((v) => {
+              if (renderedVars.has(v)) return;
+              
+              renderItems.push(
+                <div
+                  key={`cell-${v}`}
+                  ref={(el) => { tileRefs.current[v] = el; }}
+                  className="min-h-0 will-change-transform [contain:content] relative"
+                  style={{ height: '100%' }}
+                >
+                  {renderChartCard(v, false, false)}
+                </div>
+              );
+            });
+            
+            return renderItems;
+          })()}
                 </div>
               </div>
             </div>
@@ -969,7 +1261,7 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
                 </div>
                 <div className="mt-4 flex items-center justify-end gap-2">
                   <Button size="sm" variant="outline" onClick={() => setShowCountryPicker(false)}>Close</Button>
-                  <Button size="sm" disabled={pickerCountries.length === 0} onClick={async () => { setShowCountryPicker(false); await runExplainForCountries(pickerCountries); }}>Explain</Button>
+                  <Button size="sm" disabled={pickerCountries.length === 0} onClick={async () => { setShowCountryPicker(false); await runExplainForCountries(pickerCountries, selectedForExplain); }}>Explain</Button>
                 </div>
               </div>
             </div>
@@ -980,18 +1272,8 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
   <div id="desktop-sidebar-scroll" className="hidden sm:block h-full overflow-y-auto min-h-0">
           <ChartSidebar
             currentQuery={currentQuery}
-            onQueryChange={handleQueryUpdate}
+            onQueryChange={onQueryChange}
             registerReveal={registerReveal}
-            onRunCorrelations={runCorrelations}
-            correlationsLoading={correlationsLoading}
-            correlationsError={correlationsError}
-            correlationsResults={correlationsResults}
-            selectedCorrelationPairs={selectedCorrelationPairs}
-            onToggleCorrelationPair={toggleCorrelationPair}
-            onAddSelectedCorrelationCharts={addSelectedCorrelationCharts}
-            selectedForExplain={selectedForExplain}
-            explaining={explaining}
-            onExplainCorrelations={handleExplainCorrelations}
           />
         </div>
       </div>
@@ -1009,18 +1291,9 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
             <div id="mobile-sidebar-scroll" className="flex-1 overflow-y-auto min-h-0">
             <ChartSidebar
               currentQuery={currentQuery}
-              onQueryChange={handleQueryUpdate}
+              onQueryChange={onQueryChange}
               registerReveal={registerReveal}
-              onRunCorrelations={runCorrelations}
-              correlationsLoading={correlationsLoading}
-              correlationsError={correlationsError}
-              correlationsResults={correlationsResults}
-              selectedCorrelationPairs={selectedCorrelationPairs}
-              onToggleCorrelationPair={toggleCorrelationPair}
-              onAddSelectedCorrelationCharts={addSelectedCorrelationCharts}
-              selectedForExplain={selectedForExplain}
-              explaining={explaining}
-              onExplainCorrelations={handleExplainCorrelations}
+              hasPendingChanges={hasPendingChanges}
             />
           </div>
         </div>
