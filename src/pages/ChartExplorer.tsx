@@ -50,6 +50,23 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
   const gridRef = useRef<HTMLDivElement | null>(null);
   // Mobile viewport detection to adjust chart heights
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  
+  // Detect mobile viewport
+  useEffect(() => {
+    const checkMobileViewport = () => {
+      setIsMobileViewport(window.innerWidth < 768); // md breakpoint
+    };
+    
+    // Check on mount
+    checkMobileViewport();
+    
+    // Listen for resize
+    window.addEventListener('resize', checkMobileViewport);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobileViewport);
+    };
+  }, []);
   // Refs for FLIP animations (smooth reflow when layout/selection changes)
   const tileRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const prevRectsRef = useRef<Record<string, DOMRect>>({});
@@ -1268,7 +1285,7 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
 
   return (
     <div className="bg-background h-full overflow-hidden">
-      <div className="grid grid-cols-1 sm:grid-cols-[1fr_360px] gap-0 p-4 h-full overflow-hidden min-h-0">
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_360px] gap-0 p-0 sm:p-4 h-full overflow-hidden min-h-0">
         {/* Left: Chart area fills all space up to the sidebar */}
         <div className="pr-0 sm:pr-4 min-h-0 h-full overflow-hidden relative">
           {/* Mobile filter button - floating action button style */}
@@ -1301,14 +1318,14 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
 
                 <div
                   ref={gridRef}
-                  className={`grid gap-3 h-full overflow-y-auto min-h-0 ${
+                  className={`grid gap-4 h-full overflow-y-auto min-h-0 ${
                     isMobileViewport || allChartItems.length === 1
                       ? 'grid-cols-1'
                       : 'grid-cols-2'
                   }`}
                   style={{ 
                     gridAutoRows: isMobileViewport 
-                      ? '320px' 
+                      ? '640px' 
                       : (allChartItems.length === 1 
                           ? (allChartItems[0]?.type.includes('pair') ? '420px' : '630px')
                           : '420px'
@@ -1321,8 +1338,8 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
                 <div
                   key={`cell-${item.id}`}
                   ref={(el) => { tileRefs.current[item.id] = el; }}
-                  className="min-h-0 will-change-transform [contain:content] relative"
-                  style={{ height: '100%' }}
+                  className="min-h-0 will-change-transform [contain:content] relative overflow-hidden isolate"
+                  style={{ height: isMobileViewport ? '640px' : '100%' }}
                 >
                   {renderChartCard(item.id, false, false)}
                 </div>
@@ -1331,7 +1348,7 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
               return (
                 <div
                   key={item.id}
-                  className="min-h-0 will-change-transform [contain:content] relative"
+                  className="min-h-0 will-change-transform [contain:content] relative overflow-hidden isolate"
                   style={{
                     height: isMobileViewport ? '640px' : '100%',
                     gridColumn: isMobileViewport ? 'span 1' : 'span 2'
@@ -1344,7 +1361,7 @@ export function ChartExplorer({ currentQuery, onQueryChange }: ChartExplorerProp
               return (
                 <div
                   key={item.id}
-                  className="min-h-0 will-change-transform [contain:content] relative"
+                  className="min-h-0 will-change-transform [contain:content] relative overflow-hidden isolate"
                   style={{
                     height: isMobileViewport ? '640px' : '100%',
                     gridColumn: isMobileViewport ? 'span 1' : 'span 2'
